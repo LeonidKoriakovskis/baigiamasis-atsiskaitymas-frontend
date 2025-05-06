@@ -1,35 +1,97 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, {  useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import axios from 'axios';
 
-function App() {
-  const [count, setCount] = useState(0)
+
+// Components
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import Dashboard from './components/Dashboard';
+import ProjectList from './components/projects/ProjectList';
+
+
+
+// Context
+import ProtectedRoute from './components/ProtectedRoute';
+// import AdminRoute from './components/AdminRoute';
+import { AuthProvider } from './context/AuthContext';
+import ProjectDetail from './components/projects/ProjectDetail';
+
+
+
+const App: React.FC = () => {
+  // Set up axios defaults
+  axios.defaults.baseURL = 'http://localhost:3000/api';
+  
+  // Set auth token for all requests if available
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return () => {
+      delete axios.defaults.headers.common['Authorization'];
+    };
+  }, []);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <AuthProvider>
+      <Router>
+        <div className="app-container">
+          {/* <Navbar /> */}
+          <main className="main-content">
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              
+              {/* Protected Routes */}
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/projects" element={
+                <ProtectedRoute>
+                  <ProjectList />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/projects/:id" element={
+                <ProtectedRoute>
+                  <ProjectDetail />
+                </ProtectedRoute>
+              } />
+              
+              {/* <Route path="/tasks/:id" element={
+                <ProtectedRoute>
+                  <TaskDetail />
+                </ProtectedRoute>
+              } /> */}
+              
+              {/* <Route path="/profile" element={
+                <ProtectedRoute>
+                  <UserProfile />
+                </ProtectedRoute>
+              } /> */}
+              
+              {/* Admin Routes
+              <Route path="/users" element={
+                <AdminRoute>
+                  <UserList />
+                </AdminRoute>
+              } /> */}
+              
+              {/* Redirect to dashboard if logged in, otherwise to login */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </Router>
+    </AuthProvider>
+  );
+};
 
-export default App
+export default App;
