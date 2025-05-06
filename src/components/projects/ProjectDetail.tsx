@@ -4,7 +4,9 @@ import axios from 'axios';
 
 interface Project {
   id: string;
+  _id?: string;
   name: string;
+  title?: string;
   description: string;
   status: string;
   createdAt: string;
@@ -37,27 +39,86 @@ const ProjectDetail: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    status: ''
+    description: ''
   });
 
   useEffect(() => {
     const fetchProjectDetails = async () => {
       try {
-        const [projectRes, tasksRes, membersRes] = await Promise.all([
-          axios.get(`/projects/${id}`),
-          axios.get(`/projects/${id}/tasks`),
-          axios.get(`/projects/${id}/members`)
-        ]);
+        setIsLoading(true);
         
-        setProject(projectRes.data.project);
-        setFormData({
-          name: projectRes.data.project.name,
-          description: projectRes.data.project.description,
-          status: projectRes.data.project.status
-        });
-        setTasks(tasksRes.data.tasks);
-        setMembers(membersRes.data.members);
+        // Fetch project details first
+        let projectData = null;
+        try {
+          const projectRes = await axios.get(`/projects/${id}`);
+          console.log('Project detail response:', projectRes.data);
+          
+          // Handle response which could be the project directly or nested
+          projectData = projectRes.data.project || projectRes.data;
+          
+          if (projectData) {
+            console.log('Project data to use:', projectData);
+            setProject({
+              id: projectData._id || projectData.id || id,
+              name: projectData.title || projectData.name || 'Untitled Project',
+              title: projectData.title || projectData.name,
+              description: projectData.description || '',
+              status: projectData.status || 'pending',
+              createdAt: projectData.createdAt || new Date().toISOString(),
+              updatedAt: projectData.updatedAt || projectData.createdAt || new Date().toISOString()
+            });
+            
+            setFormData({
+              name: projectData.title || projectData.name || '',
+              description: projectData.description || ''
+            });
+          } else {
+            console.error('Project data is empty or invalid');
+            setIsLoading(false);
+            return;
+          }
+        } catch (projectError) {
+          console.error('Error fetching project:', projectError);
+          // If we can't fetch the project, we can't continue
+          setIsLoading(false);
+          return;
+        }
+        
+        // Try to fetch tasks, but handle 404s gracefully
+        try {
+          const tasksRes = await axios.get(`/projects/${id}/tasks`);
+          setTasks(tasksRes.data.tasks || []);
+        } catch (tasksError) {
+          console.log('Tasks endpoint not available, setting empty tasks list');
+          setTasks([]);
+        }
+        
+        // Try to fetch members, but handle 404s gracefully
+        try {
+          const membersRes = await axios.get(`/projects/${id}/members`);
+          setMembers(membersRes.data.members || []);
+        } catch (membersError) {
+          console.log('Members endpoint not available, using project members if available');
+          // Try to use project.members if it exists
+          if (projectData && projectData.members && Array.isArray(projectData.members)) {
+            // If members are just IDs, we can't display full info
+            const basicMembers = projectData.members.map((member: string | any) => {
+              if (typeof member === 'string') {
+                return { id: member, name: 'Unknown', email: '', role: 'member' };
+              } else {
+                return {
+                  id: member._id || member.id || '',
+                  name: member.name || 'Unknown',
+                  email: member.email || '',
+                  role: member.role || 'member'
+                };
+              }
+            });
+            setMembers(basicMembers);
+          } else {
+            setMembers([]);
+          }
+        }
       } catch (error) {
         console.error('Error fetching project details:', error);
       } finally {
@@ -79,9 +140,20 @@ const ProjectDetail: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await axios.put(`/projects/${id}`, formData);
+      // Only send the fields that exist in the backend model
+      // Rename 'name' to 'title' as expected by the backend
+      const dataToSend = {
+        title: formData.name,
+        description: formData.description
+      };
+      
+      const response = await axios.put(`/projects/${id}`, dataToSend);
+      // Update the project in state
       setProject(response.data.project);
       setIsEditing(false);
+      
+      // Redirect to refresh the page with updated data
+      navigate(`/projects/${id}`, { replace: true });
     } catch (error) {
       console.error('Error updating project:', error);
     }
@@ -99,6 +171,8 @@ const ProjectDetail: React.FC = () => {
   };
 
   const getStatusColor = (status: string) => {
+    if (!status) return 'bg-gray-100 text-gray-800'; // Default if status is undefined
+    
     switch (status.toLowerCase()) {
       case 'completed':
         return 'bg-green-100 text-green-800';
@@ -209,21 +283,6 @@ const ProjectDetail: React.FC = () => {
                     className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
                   />
                 </div>
-                
-                <div>
-                  <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
-                  <select
-                    id="status"
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
               </div>
               
               <div className="mt-6 flex justify-end space-x-3">
@@ -248,7 +307,7 @@ const ProjectDetail: React.FC = () => {
         <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
           <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
             <div>
-              <h3 className="text-2xl leading-6 font-bold text-gray-900">{project.name}</h3>
+              <h3 className="text-2xl leading-6 font-bold text-gray-900">{project.name || project.title}</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}>
                   {project.status}

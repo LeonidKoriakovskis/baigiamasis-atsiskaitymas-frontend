@@ -17,21 +17,11 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/auth/login', { email, password });
-      const { token, user } = response.data;
-      
-      // Save token to localStorage
-      localStorage.setItem('token', token);
-      
-      // Set auth token for future requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // Update auth context
-      login(user, token);
+      await login(email, password);
       
       // Redirect to dashboard
       navigate('/');
-    } catch (err: Error | unknown) {
+    } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
       } else {

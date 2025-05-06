@@ -2,85 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
-interface Project {
+interface Task {
   id: string;
-  _id?: string;  // Add _id field for MongoDB response
-  title: string; // Change name to title
-  name?: string; // Keep name for backward compatibility
+  title: string;
   description: string;
   status: string;
-  createdAt: string;
-  tasksCount: number;
-  membersCount: number;
-  members?: string[]; // Add members array
+  priority: string;
+  dueDate: string;
+  projectId: string;
+  projectName: string;
+  assignedTo: {
+    id: string;
+    name: string;
+  };
 }
 
-const ProjectList: React.FC = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
+const TaskList: React.FC = () => {
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [apiError, setApiError] = useState<string | null>(null);
+  const [priorityFilter, setPriorityFilter] = useState('all');
 
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchTasks = async () => {
       try {
-        console.log('Fetching projects...');
-        const response = await axios.get('/projects');
-        console.log('API Response in ProjectList:', response.data);
-        
-        // Check if response contains projects
-        if (!response.data) {
-          console.error('Invalid API response format:', response.data);
-          setApiError('Unexpected API response format');
-          setProjects([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Handle different response formats
-        const projectsArray = Array.isArray(response.data) 
-          ? response.data 
-          : response.data.projects || [];
-        
-        if (!Array.isArray(projectsArray)) {
-          console.error('Projects data is not an array:', projectsArray);
-          setApiError('Invalid projects data format');
-          setProjects([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log('Projects array in ProjectList:', projectsArray);
-        
-        // Map the response to ensure consistent field naming
-        const projectData = projectsArray.map((project: Project & { _id?: string }) => {
-          console.log('Processing project in ProjectList:', project);
-          return {
-            id: project._id || project.id || '',
-            title: project.title || project.name || '',
-            name: project.title || project.name || '', // Keep both for compatibility
-            description: project.description || '',
-            status: project.status || 'pending',
-            createdAt: project.createdAt || new Date().toISOString(),
-            tasksCount: project.tasksCount || 0,
-            membersCount: project.membersCount || (project.members ? project.members.length : 0)
-          };
-        });
-        
-        console.log('Processed projects in ProjectList:', projectData);
-        setProjects(projectData);
-        setApiError(null);
+        const response = await axios.get('/tasks');
+        setTasks(response.data.tasks);
       } catch (error) {
-        console.error('Error fetching projects:', error);
-        setApiError('Failed to fetch projects');
-        setProjects([]);
+        console.error('Error fetching tasks:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchProjects();
+    fetchTasks();
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -96,62 +52,27 @@ const ProjectList: React.FC = () => {
     }
   };
 
-  const filteredProjects = projects?.filter(project => {
-    const projectTitle = (project.title || project.name || '').toLowerCase();
-    const projectDescription = (project.description || '').toLowerCase();
-    const searchTermLower = searchTerm.toLowerCase();
-    
-    const matchesSearch = projectTitle.includes(searchTermLower) || 
-                          projectDescription.includes(searchTermLower);
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }) || [];
+  const getPriorityColor = (priority: string) => {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 text-red-800';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'low':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-  if (apiError) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">
-                {apiError} - Please try refreshing the page or check your API connection.
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-          <Link 
-            to="/projects/new" 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Create Project
-          </Link>
-        </div>
-        
-        <div className="text-center py-12 bg-white shadow overflow-hidden sm:rounded-md">
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No projects found</h3>
-          <div className="mt-6">
-            <Link
-              to="/projects/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Create Project
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          task.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || task.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesPriority = priorityFilter === 'all' || task.priority.toLowerCase() === priorityFilter.toLowerCase();
+    
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
 
   if (isLoading) {
     return (
@@ -164,17 +85,17 @@ const ProjectList: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
         <Link 
-          to="/projects/new" 
+          to="/tasks/new" 
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          Create Project
+          Create Task
         </Link>
       </div>
       
-      <div className="mb-6 flex flex-col md:flex-row gap-4">
-        <div className="flex-1">
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="col-span-1 md:col-span-1">
           <label htmlFor="search" className="sr-only">Search</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -186,7 +107,7 @@ const ProjectList: React.FC = () => {
               id="search"
               name="search"
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="Search projects"
+              placeholder="Search tasks"
               type="search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -194,7 +115,7 @@ const ProjectList: React.FC = () => {
           </div>
         </div>
         
-        <div className="w-full md:w-48">
+        <div>
           <label htmlFor="status" className="sr-only">Filter by status</label>
           <select
             id="status"
@@ -209,21 +130,40 @@ const ProjectList: React.FC = () => {
             <option value="completed">Completed</option>
           </select>
         </div>
+        
+        <div>
+          <label htmlFor="priority" className="sr-only">Filter by priority</label>
+          <select
+            id="priority"
+            name="priority"
+            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+          >
+            <option value="all">All Priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
       </div>
       
-      {filteredProjects.length > 0 ? (
+      {filteredTasks.length > 0 ? (
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
           <ul className="divide-y divide-gray-200">
-            {filteredProjects.map((project) => (
-              <li key={project.id}>
-                <Link to={`/projects/${project.id}`} className="block hover:bg-gray-50">
+            {filteredTasks.map((task) => (
+              <li key={task.id}>
+                <Link to={`/tasks/${task.id}`} className="block hover:bg-gray-50">
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <p className="text-sm font-medium text-indigo-600 truncate">{project.title}</p>
+                        <p className="text-sm font-medium text-indigo-600 truncate">{task.title}</p>
                         <div className="ml-2 flex-shrink-0 flex">
-                          <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}>
-                            {project.status}
+                          <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(task.status)}`}>
+                            {task.status}
+                          </p>
+                          <p className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
                           </p>
                         </div>
                       </div>
@@ -241,13 +181,13 @@ const ProjectList: React.FC = () => {
                           <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                           </svg>
-                          {project.membersCount} members
+                          {task.assignedTo?.name || 'Unassigned'}
                         </p>
                         <p className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 sm:ml-6">
                           <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2a1 1 0 011-1h8a1 1 0 011 1z" clipRule="evenodd" />
                           </svg>
-                          {project.tasksCount} tasks
+                          {task.projectName}
                         </p>
                       </div>
                       <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
@@ -255,7 +195,7 @@ const ProjectList: React.FC = () => {
                           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                         </svg>
                         <p>
-                          Created on <time dateTime={project.createdAt}>{new Date(project.createdAt).toLocaleDateString()}</time>
+                          Due <time dateTime={task.dueDate}>{new Date(task.dueDate).toLocaleDateString()}</time>
                         </p>
                       </div>
                     </div>
@@ -270,22 +210,22 @@ const ProjectList: React.FC = () => {
           <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No projects found</h3>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks found</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {searchTerm || statusFilter !== 'all' 
-              ? 'Try adjusting your search or filter to find what you\'re looking for.' 
-              : 'Get started by creating a new project.'}
+            {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
+              ? 'Try adjusting your search or filters to find what you\'re looking for.' 
+              : 'Get started by creating a new task.'}
           </p>
-          {!searchTerm && statusFilter === 'all' && (
+          {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
             <div className="mt-6">
               <Link
-                to="/projects/new"
+                to="/tasks/new"
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
-                Create Project
+                Create Task
               </Link>
             </div>
           )}
@@ -295,4 +235,4 @@ const ProjectList: React.FC = () => {
   );
 };
 
-export default ProjectList;
+export default TaskList;
