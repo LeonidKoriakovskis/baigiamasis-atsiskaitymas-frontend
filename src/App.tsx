@@ -22,6 +22,8 @@ import AdminRoute from './components/AdminRoute';
 import { AuthProvider } from './context/AuthContext';
 import UserProfile from './components/users/UserProfile';
 import UserList from './components/users/UserList';
+import TaskNew from './components/tasks/TaskNew';
+import TaskList from './components/tasks/TaskList';
 
 
 
@@ -101,6 +103,24 @@ const App: React.FC = () => {
               <Route path="/projects/:id" element={
                 <ProtectedRoute>
                   <ProjectDetail />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/projects/:id/tasks/new" element={
+                <ProtectedRoute>
+                  <TaskNew />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/tasks" element={
+                <ProtectedRoute>
+                  <TaskList />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/tasks/new" element={
+                <ProtectedRoute>
+                  <TaskNew />
                 </ProtectedRoute>
               } />
               

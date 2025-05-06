@@ -12,8 +12,25 @@ interface Task {
   projectId: string;
   projectName: string;
   assignedTo: {
-    id: string;
-    name: string;
+    id?: string;
+    name?: string;
+  };
+}
+
+interface TaskResponse {
+  _id?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string;
+  projectId?: string;
+  project?: string;
+  assignedTo?: string | {
+    id?: string;
+    _id?: string;
+    name?: string;
   };
 }
 
@@ -27,8 +44,50 @@ const TaskList: React.FC = () => {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const response = await axios.get('/tasks');
-        setTasks(response.data.tasks);
+        setIsLoading(true);
+        
+        // First get all projects
+        const projectsResponse = await axios.get('/projects');
+        const projects = Array.isArray(projectsResponse.data) 
+          ? projectsResponse.data 
+          : projectsResponse.data.projects || [];
+        
+        // Fetch tasks for each project
+        const allTasks: Task[] = [];
+        
+        for (const project of projects) {
+          try {
+            const projectId = project._id || project.id;
+            const projectName = project.title || project.name || 'Unknown Project';
+            
+            // Get tasks for this project
+            const taskResponse = await axios.get(`/tasks/project/${projectId}`);
+            const projectTasks = taskResponse.data.tasks || taskResponse.data || [];
+            
+            if (Array.isArray(projectTasks)) {
+              // Map tasks to include project information
+              const formattedTasks = projectTasks.map((task: TaskResponse) => ({
+                id: task._id || task.id || '',
+                title: task.title || 'Untitled Task',
+                description: task.description || '',
+                status: task.status || 'pending',
+                priority: task.priority || 'medium',
+                dueDate: task.dueDate || new Date().toISOString(),
+                projectId: projectId || '',
+                projectName: projectName || 'Unknown Project',
+                assignedTo: typeof task.assignedTo === 'string' 
+                  ? { id: task.assignedTo, name: 'Assigned User' }
+                  : (task.assignedTo || { id: undefined, name: 'Unassigned' })
+              }));
+              
+              allTasks.push(...formattedTasks);
+            }
+          } catch {
+            console.log(`No tasks found for project ${project._id || project.id}`);
+          }
+        }
+        
+        setTasks(allTasks);
       } catch (error) {
         console.error('Error fetching tasks:', error);
       } finally {
@@ -40,12 +99,15 @@ const TaskList: React.FC = () => {
   }, []);
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'completed':
+      case 'done':
         return 'bg-green-100 text-green-800';
       case 'in progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800';
       case 'pending':
+      case 'todo':
         return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -125,8 +187,10 @@ const TaskList: React.FC = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">All Statuses</option>
+            <option value="todo">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
             <option value="pending">Pending</option>
-            <option value="in progress">In Progress</option>
             <option value="completed">Completed</option>
           </select>
         </div>

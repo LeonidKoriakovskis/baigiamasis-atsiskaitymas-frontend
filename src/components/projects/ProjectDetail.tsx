@@ -15,6 +15,7 @@ interface Project {
 
 interface Task {
   id: string;
+  _id?: string;
   title: string;
   description: string;
   status: string;
@@ -22,11 +23,30 @@ interface Task {
   dueDate: string;
 }
 
+interface TaskApiResponse {
+  _id?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string;
+  projectId?: string;
+}
+
 interface Member {
   id: string;
   name: string;
   email: string;
   role: string;
+}
+
+interface MemberData {
+  _id?: string;
+  id?: string;
+  name?: string; 
+  email?: string;
+  role?: string;
 }
 
 const ProjectDetail: React.FC = () => {
@@ -86,23 +106,61 @@ const ProjectDetail: React.FC = () => {
         
         // Try to fetch tasks, but handle 404s gracefully
         try {
-          const tasksRes = await axios.get(`/projects/${id}/tasks`);
-          setTasks(tasksRes.data.tasks || []);
-        } catch (tasksError) {
-          console.log('Tasks endpoint not available, setting empty tasks list');
-          setTasks([]);
+          // Use the correct tasks endpoint based on backend implementation
+          const tasksRes = await axios.get(`/tasks/project/${id}`);
+          const tasksData = tasksRes.data.tasks || tasksRes.data || [];
+          
+          // Ensure we have an array of tasks with valid structure
+          if (Array.isArray(tasksData)) {
+            const formattedTasks = tasksData.map((task: TaskApiResponse) => ({
+              id: task._id || task.id || '',
+              title: task.title || 'Untitled Task',
+              description: task.description || '',
+              status: task.status || 'pending',
+              priority: task.priority || 'medium',
+              dueDate: task.dueDate || new Date().toISOString()
+            }));
+            setTasks(formattedTasks);
+          } else {
+            setTasks([]);
+          }
+        } catch {
+          console.log('Correct tasks endpoint not available, trying fallback...');
+          
+          // Try fallback endpoint for backward compatibility
+          try {
+            const tasksRes = await axios.get(`/projects/${id}/tasks`);
+            const tasksData = tasksRes.data.tasks || tasksRes.data || [];
+            
+            if (Array.isArray(tasksData)) {
+              const formattedTasks = tasksData.map((task: TaskApiResponse) => ({
+                id: task._id || task.id || '',
+                title: task.title || 'Untitled Task',
+                description: task.description || '',
+                status: task.status || 'pending', 
+                priority: task.priority || 'medium',
+                dueDate: task.dueDate || new Date().toISOString()
+              }));
+              setTasks(formattedTasks);
+            } else {
+              setTasks([]);
+            }
+          } catch {
+            console.log('Tasks endpoints not available, setting empty tasks list');
+            setTasks([]);
+          }
         }
         
         // Try to fetch members, but handle 404s gracefully
         try {
           const membersRes = await axios.get(`/projects/${id}/members`);
           setMembers(membersRes.data.members || []);
-        } catch (membersError) {
+        } catch {
           console.log('Members endpoint not available, using project members if available');
           // Try to use project.members if it exists
           if (projectData && projectData.members && Array.isArray(projectData.members)) {
             // If members are just IDs, we can't display full info
-            const basicMembers = projectData.members.map((member: string | any) => {
+            const basicMembers = projectData.members.map((member: string | MemberData) => {
               if (typeof member === 'string') {
                 return { id: member, name: 'Unknown', email: '', role: 'member' };
               } else {
@@ -367,9 +425,9 @@ const ProjectDetail: React.FC = () => {
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
           {tasks.length > 0 ? (
             <ul className="divide-y divide-gray-200">
-              {tasks.map((task) => (
-                <li key={task.id}>
-                  <Link to={`/tasks/${task.id}`} className="block hover:bg-gray-50">
+              {tasks.map((task, index) => (
+                <li key={`task-${task.id || index}`}>
+                  <Link to={`/tasks/${task._id || task.id}`} className="block hover:bg-gray-50">
                     <div className="px-4 py-4 sm:px-6">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-indigo-600 truncate">{task.title}</p>
@@ -427,8 +485,8 @@ const ProjectDetail: React.FC = () => {
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
           {members.length > 0 ? (
             <ul className="divide-y divide-gray-200">
-              {members.map((member) => (
-                <li key={member.id}>
+              {members.map((member, index) => (
+                <li key={`member-${index}-${member.id || 'unknown'}`}>
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">

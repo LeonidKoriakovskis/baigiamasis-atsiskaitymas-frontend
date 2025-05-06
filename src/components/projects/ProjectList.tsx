@@ -54,7 +54,7 @@ const ProjectList: React.FC = () => {
         console.log('Projects array in ProjectList:', projectsArray);
         
         // Map the response to ensure consistent field naming
-        const projectData = projectsArray.map((project: Project & { _id?: string }) => {
+        const projectsWithBasicInfo = projectsArray.map((project: Project & { _id?: string }) => {
           console.log('Processing project in ProjectList:', project);
           return {
             id: project._id || project.id || '',
@@ -63,13 +63,36 @@ const ProjectList: React.FC = () => {
             description: project.description || '',
             status: project.status || 'pending',
             createdAt: project.createdAt || new Date().toISOString(),
-            tasksCount: project.tasksCount || 0,
-            membersCount: project.membersCount || (project.members ? project.members.length : 0)
+            tasksCount: 0, // Will be updated with actual count
+            membersCount: project.membersCount || (project.members ? project.members.length : 0),
+            members: project.members || []
           };
         });
         
-        console.log('Processed projects in ProjectList:', projectData);
-        setProjects(projectData);
+        // Fetch tasks for each project to get accurate counts
+        const projectsWithTasks = await Promise.all(
+          projectsWithBasicInfo.map(async (project) => {
+            try {
+              // Get tasks for this project
+              const tasksResponse = await axios.get(`/tasks/project/${project.id}`);
+              const projectTasks = Array.isArray(tasksResponse.data) 
+                ? tasksResponse.data 
+                : tasksResponse.data.tasks || [];
+              
+              // Update task count based on actual data
+              return {
+                ...project,
+                tasksCount: Array.isArray(projectTasks) ? projectTasks.length : 0
+              };
+            } catch (error) {
+              console.log(`Could not fetch tasks for project ${project.id}:`, error);
+              return project; // Return project with default task count if fetch fails
+            }
+          })
+        );
+        
+        console.log('Processed projects with task counts in ProjectList:', projectsWithTasks);
+        setProjects(projectsWithTasks);
         setApiError(null);
       } catch (error) {
         console.error('Error fetching projects:', error);

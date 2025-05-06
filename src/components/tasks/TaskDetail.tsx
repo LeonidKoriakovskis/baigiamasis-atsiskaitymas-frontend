@@ -19,6 +19,22 @@ interface Task {
   updatedAt: string;
 }
 
+interface TaskResponse {
+  _id?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string;
+  projectId?: string;
+  assignedTo?: string | {
+    id?: string;
+    _id?: string;
+    name?: string;
+  };
+}
+
 interface User {
   id: string;
   name: string;
@@ -43,25 +59,223 @@ const TaskDetail: React.FC = () => {
   useEffect(() => {
     const fetchTaskDetails = async () => {
       try {
-        const [taskRes, usersRes] = await Promise.all([
-          axios.get(`/tasks/${id}`),
-          axios.get('/users')
-        ]);
+        // Try both the direct get by ID and by searching in projects
+        let taskResponse = null;
+        let projectData = null;
+        let foundTask = false;
         
-        setTask(taskRes.data.task);
-        setFormData({
-          title: taskRes.data.task.title,
-          description: taskRes.data.task.description,
-          status: taskRes.data.task.status,
-          priority: taskRes.data.task.priority,
-          dueDate: taskRes.data.task.dueDate.split('T')[0], // Format date for input
-          assignedToId: taskRes.data.task.assignedTo?.id || ''
-        });
-        setUsers(usersRes.data.users);
+        // First, fetch all projects to have project data available
+        let allProjects = [];
+        try {
+          const projectsResponse = await axios.get('/projects');
+          allProjects = Array.isArray(projectsResponse.data) 
+            ? projectsResponse.data 
+            : projectsResponse.data.projects || [];
+          console.log('All projects fetched:', allProjects);
+        } catch (projectsError) {
+          console.error('Error fetching all projects:', projectsError);
+        }
+        
+        try {
+          // First try to get the task directly
+          taskResponse = await axios.get(`/tasks/${id}`);
+          foundTask = true;
+          
+          // If the task has projectId, find the project
+          if (taskResponse.data && (taskResponse.data.projectId || taskResponse.data.project)) {
+            const projectId = taskResponse.data.projectId || taskResponse.data.project;
+            projectData = allProjects.find((p: { _id?: string; id?: string }) => (p._id === projectId || p.id === projectId));
+            
+            if (!projectData) {
+              try {
+                const projectRes = await axios.get(`/projects/${projectId}`);
+                projectData = projectRes.data.project || projectRes.data;
+                console.log('Project fetched for task:', projectData);
+              } catch (err) {
+                console.error('Error fetching project for task:', err);
+              }
+            }
+          }
+        } catch (directError) {
+          console.error('Error fetching task directly:', directError);
+          
+          // If direct fetch fails, try to find the task by searching through all projects
+          if (allProjects.length > 0) {
+            // Try each project to find the task
+            for (const project of allProjects) {
+              if (foundTask) break;
+              
+              try {
+                const projectId = project._id || project.id;
+                projectData = project; // Store project data for later use
+                const projectTasksResponse = await axios.get(`/tasks/project/${projectId}`);
+                const projectTasks = projectTasksResponse.data.tasks || projectTasksResponse.data || [];
+                
+                if (Array.isArray(projectTasks)) {
+                  // Find the task in the project's tasks
+                  const matchingTask = projectTasks.find((task: TaskResponse) => 
+                    (task._id === id || task.id === id)
+                  );
+                  
+                  if (matchingTask) {
+                    taskResponse = { data: { task: matchingTask } };
+                    foundTask = true;
+                    break;
+                  }
+                }
+              } catch {
+                console.log(`No tasks found for project ${project._id || project.id}`);
+              }
+            }
+          }
+        }
+        
+        // Fetch users for task assignment
+        await fetchUsers();
+        
+        if (foundTask && taskResponse?.data) {
+          // Handle different response formats
+          let taskData = null;
+          
+          if (taskResponse.data.task) {
+            // Response with nested task object
+            taskData = taskResponse.data.task;
+          } else if (taskResponse.data._id || taskResponse.data.id) {
+            // Response with direct task data
+            taskData = taskResponse.data;
+          }
+          
+          if (taskData) {
+            // If we have the project data from earlier, use it to get project name
+            let projectName = 'Unknown Project';
+            // Extract project ID ensuring it's a string, not an object
+            const rawProjectId = taskData.projectId || taskData.project || '';
+            // Make sure we have a string project ID, not an object
+            const projectId = typeof rawProjectId === 'object' && rawProjectId !== null 
+              ? (rawProjectId._id || rawProjectId.id || '') 
+              : rawProjectId;
+            
+            console.log('Project ID extracted for task:', projectId, 'type:', typeof projectId);
+            
+            // First try to get project name from task data
+            if (taskData.projectName) {
+              projectName = taskData.projectName;
+            } else if (projectId) {
+              // Try to find project in the already fetched projects list
+              const foundProject = allProjects.find((p: { _id?: string; id?: string; title?: string; name?: string }) => 
+                p._id === projectId || p.id === projectId
+              );
+              
+              if (foundProject) {
+                projectData = foundProject;
+                projectName = foundProject.title || foundProject.name || 'Unknown Project';
+                console.log('Found project in list:', projectName);
+              }
+              // Use project data to get name if found but not in list
+              else if (projectData) {
+                projectName = projectData.title || projectData.name || 'Unknown Project';
+                console.log('Using project data from earlier fetch:', projectName);
+              } 
+              // Final attempt - direct project fetch
+              else {
+                try {
+                  console.log('Trying to fetch project directly with ID:', projectId);
+                  // Only try to fetch if we have a valid string ID
+                  if (typeof projectId === 'string' && projectId.length > 0) {
+                    const projectRes = await axios.get(`/projects/${projectId}`);
+                    projectData = projectRes.data.project || projectRes.data;
+                    projectName = projectData.title || projectData.name || 'Unknown Project';
+                    console.log('Project fetched directly:', projectName);
+                  } else {
+                    console.log('Invalid project ID, cannot fetch project');
+                  }
+                } catch (err) {
+                  console.error('Error fetching project details:', err);
+                }
+              }
+            }
+            
+            console.log('Final project name to use:', projectName);
+            
+            // Create a standardized task object
+            const standardizedTask = {
+              id: taskData._id || taskData.id || id,
+              title: taskData.title || 'Untitled Task',
+              description: taskData.description || '',
+              status: taskData.status || 'pending',
+              priority: taskData.priority || 'medium',
+              dueDate: taskData.dueDate || new Date().toISOString(),
+              projectId: projectId,
+              projectName: projectName,
+              assignedTo: typeof taskData.assignedTo === 'string' 
+                ? { id: taskData.assignedTo, name: 'Assigned User' }
+                : taskData.assignedTo || { id: '', name: 'Unassigned' },
+              createdAt: taskData.createdAt || new Date().toISOString(),
+              updatedAt: taskData.updatedAt || taskData.createdAt || new Date().toISOString()
+            };
+            
+            console.log('Standardized task with project name:', standardizedTask);
+            setTask(standardizedTask);
+            
+            setFormData({
+              title: standardizedTask.title,
+              description: standardizedTask.description,
+              status: standardizedTask.status,
+              priority: standardizedTask.priority,
+              dueDate: standardizedTask.dueDate.split('T')[0],
+              assignedToId: typeof taskData.assignedTo === 'string'
+                ? taskData.assignedTo
+                : (taskData.assignedTo?.id || taskData.assignedTo?._id || '')
+            });
+          } else {
+            console.error('Could not parse task data from response:', taskResponse.data);
+          }
+        } else {
+          // Task not found by any method
+          console.error('Task not found by any method');
+        }
       } catch (error) {
-        console.error('Error fetching task details:', error);
+        console.error('Error in task fetching process:', error);
       } finally {
         setIsLoading(false);
+      }
+    };
+    
+    // Function to fetch users, similar to TaskNew component
+    const fetchUsers = async () => {
+      try {
+        const usersRes = await axios.get('/users');
+        const userData = usersRes.data.users || usersRes.data || [];
+        console.log('Users fetched:', userData);
+        
+        // Map users to consistent format
+        const formattedUsers = userData.map((user: { _id?: string; id?: string; name?: string; username?: string; email?: string }) => ({
+          id: user._id || user.id || '',
+          name: user.name || user.username || 'Unknown User',
+          email: user.email || ''
+        }));
+        
+        setUsers(formattedUsers);
+      } catch (firstErr) {
+        console.error('Error with primary users endpoint:', firstErr);
+        
+        try {
+          // Try alternative endpoint
+          const usersRes = await axios.get('/auth/users');
+          const userData = usersRes.data.users || usersRes.data || [];
+          
+          // Map users to consistent format
+          const formattedUsers = userData.map((user: { _id?: string; id?: string; name?: string; username?: string; email?: string }) => ({
+            id: user._id || user.id || '',
+            name: user.name || user.username || 'Unknown User',
+            email: user.email || ''
+          }));
+          
+          setUsers(formattedUsers);
+        } catch (secondErr) {
+          console.error('Error with fallback users endpoint:', secondErr);
+          setUsers([]);
+        }
       }
     };
 
@@ -79,9 +293,113 @@ const TaskDetail: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await axios.put(`/tasks/${id}`, formData);
-      setTask(response.data.task);
-      setIsEditing(false);
+      // Prepare task data for submission
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        dueDate: formData.dueDate,
+        assignedTo: formData.assignedToId || null
+      };
+      
+      console.log('Updating task with data:', taskData);
+      
+      // Try both potential update endpoints
+      let response;
+      let success = false;
+      
+      try {
+        // First try the direct endpoint
+        response = await axios.put(`/tasks/${id}`, taskData);
+        success = true;
+      } catch (err) {
+        console.error('Error with direct task update endpoint:', err);
+        
+        // Try to find which project this task belongs to
+        if (task?.projectId) {
+          // Make sure we have a string project ID, not an object
+          const projectId = typeof task.projectId === 'object' && task.projectId !== null
+            ? ((task.projectId as { _id?: string; id?: string })._id || (task.projectId as { _id?: string; id?: string }).id || '')
+            : task.projectId;
+            
+          if (typeof projectId === 'string' && projectId.length > 0) {
+            try {
+              // Try project-specific task endpoint
+              response = await axios.put(`/tasks/project/${projectId}/${id}`, taskData);
+              success = true;
+            } catch (err2) {
+              console.error('Error with project task update endpoint:', err2);
+              throw err2;
+            }
+          } else {
+            console.error('Invalid project ID:', task.projectId);
+            throw new Error('Invalid project ID for task update');
+          }
+        } else {
+          throw err;
+        }
+      }
+      
+      if (success && response?.data) {
+        console.log('Task update response:', response.data);
+        
+        // Handle different response formats
+        let updatedTaskData;
+        if (response.data.task) {
+          updatedTaskData = response.data.task;
+        } else if (response.data._id || response.data.id) {
+          updatedTaskData = response.data;
+        }
+        
+        if (updatedTaskData) {
+          // Find assigned user name if we have a user ID
+          let assignedUserName = 'Unassigned';
+          const assignedUserId = formData.assignedToId || 
+            (typeof updatedTaskData.assignedTo === 'string' ? updatedTaskData.assignedTo : 
+              (updatedTaskData.assignedTo?.id || updatedTaskData.assignedTo?._id || ''));
+          
+          if (assignedUserId) {
+            const assignedUser = users.find(user => user.id === assignedUserId);
+            if (assignedUser) {
+              assignedUserName = assignedUser.name;
+            } else {
+              assignedUserName = 'Assigned User';
+            }
+          }
+          
+          // Extract project ID properly, ensuring it's a string
+          const rawProjectId = updatedTaskData.projectId || task?.projectId || '';
+          const projectId = typeof rawProjectId === 'object' && rawProjectId !== null
+            ? ((rawProjectId as { _id?: string; id?: string })._id || (rawProjectId as { _id?: string; id?: string }).id || '')
+            : rawProjectId;
+          
+          // Ensure we preserve the project name
+          const projectName = updatedTaskData.projectName || task?.projectName || 'Unknown Project';
+          
+          // Create a standardized task object
+          const standardizedTask = {
+            id: updatedTaskData._id || updatedTaskData.id || id,
+            title: updatedTaskData.title || formData.title,
+            description: updatedTaskData.description || formData.description,
+            status: updatedTaskData.status || formData.status,
+            priority: updatedTaskData.priority || formData.priority,
+            dueDate: updatedTaskData.dueDate || formData.dueDate,
+            projectId: projectId,
+            projectName: projectName,
+            assignedTo: {
+              id: assignedUserId,
+              name: assignedUserName
+            },
+            createdAt: updatedTaskData.createdAt || task?.createdAt || new Date().toISOString(),
+            updatedAt: updatedTaskData.updatedAt || new Date().toISOString()
+          };
+          
+          console.log('Updated task with preserved project name:', standardizedTask);
+          setTask(standardizedTask);
+          setIsEditing(false);
+        }
+      }
     } catch (error) {
       console.error('Error updating task:', error);
     }
@@ -90,8 +408,34 @@ const TaskDetail: React.FC = () => {
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
       try {
-        await axios.delete(`/tasks/${id}`);
-        navigate('/tasks');
+        // Try both potential delete endpoints
+        let success = false;
+        
+        try {
+          // First try the direct endpoint
+          await axios.delete(`/tasks/${id}`);
+          success = true;
+        } catch (err) {
+          console.error('Error with direct task delete endpoint:', err);
+          
+          // Try to find which project this task belongs to
+          if (task?.projectId) {
+            try {
+              // Try project-specific task endpoint
+              await axios.delete(`/tasks/project/${task.projectId}/${id}`);
+              success = true;
+            } catch (err2) {
+              console.error('Error with project task delete endpoint:', err2);
+              throw err2;
+            }
+          } else {
+            throw err;
+          }
+        }
+        
+        if (success) {
+          navigate('/tasks');
+        }
       } catch (error) {
         console.error('Error deleting task:', error);
       }
@@ -99,12 +443,15 @@ const TaskDetail: React.FC = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'completed':
+      case 'done':
         return 'bg-green-100 text-green-800';
       case 'in progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800';
       case 'pending':
+      case 'todo':
         return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -207,9 +554,11 @@ const TaskDetail: React.FC = () => {
                       onChange={handleInputChange}
                       className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     >
-                      <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
+                      <option value="todo">To Do</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="done">Done</option>
+                      <option value="pending">Pending</option>
+                      <option value="completed">Completed</option>
                     </select>
                   </div>
                   
@@ -251,10 +600,21 @@ const TaskDetail: React.FC = () => {
                     className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="">Unassigned</option>
-                    {users.map(user => (
-                      <option key={user.id} value={user.id}>{user.name}</option>
-                    ))}
+                    {users && users.length > 0 ? (
+                      users.map((user, index) => (
+                        <option key={`user-${index}-${user.id || 'unknown'}`} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No users available</option>
+                    )}
                   </select>
+                  {users.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      No users found. Users may need to be added to the system.
+                    </p>
+                  )}
                 </div>
               </div>
               

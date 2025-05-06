@@ -11,6 +11,31 @@ interface Project {
   createdAt: string;
 }
 
+interface Task {
+  id: string;
+  _id?: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  dueDate: string;
+  projectId: string;
+  projectName?: string;
+}
+
+// Interface for task data from API
+interface TaskApiResponse {
+  _id?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string;
+  projectId?: string;
+  project?: string;
+}
+
 // Interface for project data from API
 interface ProjectApiResponse {
   _id?: string;
@@ -24,6 +49,7 @@ interface ProjectApiResponse {
 
 const Dashboard: React.FC = () => {
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+  const [userTasks, setUserTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
 
@@ -65,10 +91,146 @@ const Dashboard: React.FC = () => {
           console.error('Error fetching projects in Dashboard:', projectError);
         }
         
-        // We'll skip the tasks endpoint since it's causing 500 errors
-        // The tasks section will just show the "No tasks assigned to you" message
+        // Try to fetch tasks assigned to the user
+        let tasksData: Task[] = [];
+        let foundTasks = false;
+        
+        // Fetch tasks from all projects
+        if (projectsData.length > 0) {
+          const allProjectTasks: TaskApiResponse[] = [];
+          
+          // Try to get tasks for each project
+          for (const project of projectsData) {
+            try {
+              const projectId = project.id;
+              const projectTasksResponse = await axios.get(`/tasks/project/${projectId}`);
+              
+              if (projectTasksResponse?.data) {
+                const projectTasks = Array.isArray(projectTasksResponse.data) 
+                  ? projectTasksResponse.data 
+                  : projectTasksResponse.data.tasks || [];
+                
+                // Add project name to each task
+                const tasksWithProject = projectTasks.map((task: TaskApiResponse) => ({
+                  ...task,
+                  projectId: projectId,
+                  projectName: project.name
+                }));
+                
+                allProjectTasks.push(...tasksWithProject);
+                foundTasks = true;
+              }
+            } catch {
+              console.log(`Could not fetch tasks for project ${project.id}`);
+            }
+          }
+          
+          if (allProjectTasks.length > 0) {
+            // Map tasks to a consistent format
+            tasksData = allProjectTasks.map((task: TaskApiResponse & { projectName?: string }) => ({
+              id: task._id || task.id || '',
+              _id: task._id || task.id || '',
+              title: task.title || 'Untitled Task',
+              description: task.description || '',
+              status: task.status || 'pending',
+              priority: task.priority || 'medium',
+              dueDate: task.dueDate || new Date().toISOString(),
+              projectId: task.projectId || task.project || '',
+              projectName: task.projectName || 'Unknown Project'
+            }));
+          }
+        }
+        
+        // Try the old paths for backward compatibility
+        if (!foundTasks && user?._id) {
+          try {
+            // First try user-specific tasks endpoint
+            const tasksResponse = await axios.get(`/tasks/user/${user._id}`);
+            if (tasksResponse?.data) {
+              const tasksArray = Array.isArray(tasksResponse.data) 
+                ? tasksResponse.data 
+                : tasksResponse.data.tasks || [];
+              
+              // Map tasks to a consistent format
+              const userTasks: Task[] = tasksArray.map((task: TaskApiResponse) => ({
+                id: task._id || task.id || '',
+                _id: task._id || task.id || '',
+                title: task.title || 'Untitled Task',
+                description: task.description || '',
+                status: task.status || 'pending',
+                priority: task.priority || 'medium',
+                dueDate: task.dueDate || new Date().toISOString(),
+                projectId: task.projectId || task.project || '',
+                projectName: ''
+              }));
+              
+              // Get project names for tasks if possible
+              if (projectsData.length > 0) {
+                const tasksWithProjectNames = userTasks.map((task: Task) => {
+                  const relatedProject = projectsData.find((p: Project) => p.id === task.projectId);
+                  return {
+                    ...task,
+                    projectName: relatedProject ? relatedProject.name : 'Unknown Project'
+                  };
+                });
+                
+                tasksData = [...tasksData, ...tasksWithProjectNames];
+                foundTasks = true;
+              } else {
+                tasksData = [...tasksData, ...userTasks];
+                foundTasks = true;
+              }
+            }
+          } catch {
+            console.log(`User tasks endpoint (/tasks/user/${user._id}) not available`);
+          }
+        }
+        
+        // If still no tasks, try the general tasks endpoint
+        if (!foundTasks) {
+          try {
+            // Try general tasks endpoint with limit
+            const tasksResponse = await axios.get('/tasks?limit=5');
+            if (tasksResponse?.data) {
+              const tasksArray = Array.isArray(tasksResponse.data) 
+                ? tasksResponse.data 
+                : tasksResponse.data.tasks || [];
+              
+              // Map tasks to a consistent format
+              const generalTasks: Task[] = tasksArray.map((task: TaskApiResponse) => ({
+                id: task._id || task.id || '',
+                _id: task._id || task.id || '',
+                title: task.title || 'Untitled Task',
+                description: task.description || '',
+                status: task.status || 'pending',
+                priority: task.priority || 'medium',
+                dueDate: task.dueDate || new Date().toISOString(),
+                projectId: task.projectId || task.project || '',
+                projectName: ''
+              }));
+              
+              // Get project names for tasks if possible
+              if (projectsData.length > 0) {
+                const tasksWithProjectNames = generalTasks.map((task: Task) => {
+                  const relatedProject = projectsData.find((p: Project) => p.id === task.projectId);
+                  return {
+                    ...task,
+                    projectName: relatedProject ? relatedProject.name : 'Unknown Project'
+                  };
+                });
+                
+                tasksData = [...tasksData, ...tasksWithProjectNames];
+              } else {
+                tasksData = [...tasksData, ...generalTasks];
+              }
+            }
+          } catch {
+            console.log(`General tasks endpoint not available`);
+          }
+        }
         
         setRecentProjects(projectsData);
+        setUserTasks(tasksData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -77,16 +239,34 @@ const Dashboard: React.FC = () => {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const getStatusColor = (status: string) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    
     switch (status.toLowerCase()) {
+      case 'done':
       case 'completed':
         return 'bg-green-100 text-green-800';
+      case 'in-progress':
       case 'in progress':
         return 'bg-blue-100 text-blue-800';
+      case 'todo':
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 text-red-800';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'low':
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -119,9 +299,9 @@ const Dashboard: React.FC = () => {
           
           {recentProjects.length > 0 ? (
             <div className="space-y-4">
-              {recentProjects.map((project) => (
+              {recentProjects.map((project, index) => (
                 <Link 
-                  key={project.id} 
+                  key={`dashboard-project-${project.id || index}`} 
                   to={`/projects/${project.id}`}
                   className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                 >
@@ -159,9 +339,47 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
           
-          <div className="text-center py-8 text-gray-500">
-            <p>No tasks assigned to you</p>
-          </div>
+          {userTasks.length > 0 ? (
+            <div className="space-y-4">
+              {userTasks.map((task, index) => (
+                <Link 
+                  key={`dashboard-task-${task.id || index}`} 
+                  to={`/tasks/${task._id || task.id}`}
+                  className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-medium text-gray-900">{task.title}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{task.projectName}</p>
+                    </div>
+                    <div className="flex flex-col items-end space-y-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                        {task.status}
+                      </span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                        {task.priority}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Due: {new Date(task.dueDate).toLocaleDateString()}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No tasks assigned to you</p>
+              {recentProjects.length > 0 && (
+                <Link 
+                  to={`/projects/${recentProjects[0].id}/tasks/new`} 
+                  className="mt-2 inline-block text-indigo-600 hover:text-indigo-800"
+                >
+                  Create a new task
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
