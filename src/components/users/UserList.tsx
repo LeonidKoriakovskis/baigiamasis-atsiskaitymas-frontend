@@ -305,14 +305,12 @@ const UserList: React.FC = () => {
                         <button
                           onClick={() => openEditUserModal(user)}
                           className="text-indigo-600 hover:text-indigo-900"
-                          disabled={user._id === currentUser?._id}
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user._id)}
                           className="text-red-600 hover:text-red-900"
-                          disabled={user._id === currentUser?._id}
                         >
                           Delete
                         </button>

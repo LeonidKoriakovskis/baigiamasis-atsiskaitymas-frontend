@@ -12,13 +12,13 @@ interface UserData {
   updatedAt: string;
 }
 
-
-interface UpdateUserData {
-  name: string;
-  email: string;
-  currentPassword?: string;
-  newPassword?: string;
-}
+// Remove the unused interface:
+// interface UpdateUserData {
+//   name: string;
+//   email: string;
+//   currentPassword?: string;
+//   newPassword?: string;
+// }
 
 const UserProfile: React.FC = () => {
   const { user: authUser, updateUser } = useAuth();
@@ -44,10 +44,17 @@ const UserProfile: React.FC = () => {
     const fetchUserProfile = async () => {
       try {
         const response = await axios.get('/auth/profile');
-        setUserData(response.data.user || response.data);
+        setUserData({
+          id: response.data._id,
+          name: response.data.name,
+          email: response.data.email,
+          role: response.data.role,
+          createdAt: response.data.createdAt || new Date().toISOString(),
+          updatedAt: response.data.updatedAt || new Date().toISOString()
+        });
         setFormData({
-          name: (response.data.user || response.data).name,
-          email: (response.data.user || response.data).email,
+          name: response.data.name,
+          email: response.data.email,
           currentPassword: '',
           newPassword: '',
           confirmPassword: '',
@@ -55,13 +62,32 @@ const UserProfile: React.FC = () => {
       } catch (error) {
         console.error('Error fetching user profile:', error);
         toast.error('Failed to load profile data');
+        
+        // Fallback to auth context data if API fails
+        if (authUser) {
+          setUserData({
+            id: authUser._id,
+            name: authUser.name,
+            email: authUser.email,
+            role: authUser.role,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          setFormData({
+            name: authUser.name,
+            email: authUser.email,
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
+          });
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUserProfile();
-  }, []);
+  }, [authUser]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -125,23 +151,57 @@ const UserProfile: React.FC = () => {
     }
     
     try {
-      const updateData: UpdateUserData = {
+      // Handle profile update (name, email)
+      const updateData = {
         name: formData.name,
         email: formData.email,
       };
       
-      if (formData.newPassword) {
-        updateData.currentPassword = formData.currentPassword;
-        updateData.newPassword = formData.newPassword;
-      }
-      
       const response = await axios.put('/auth/profile', updateData);
       
-      setUserData(response.data.user || response.data);
-      updateUser(response.data.user || response.data);
+      if (response.data) {
+        setUserData({
+          id: response.data._id,
+          name: response.data.name,
+          email: response.data.email,
+          role: response.data.role,
+          createdAt: response.data.createdAt || new Date().toISOString(),
+          updatedAt: response.data.updatedAt || new Date().toISOString()
+        });
+        
+        // Update auth context
+        updateUser(response.data);
+      }
+      
+      // Handle password update separately if new password is provided
+      if (formData.newPassword) {
+        try {
+          await axios.put('/auth/update-password', {
+            currentPassword: formData.currentPassword,
+            newPassword: formData.newPassword
+          });
+          toast.success('Password updated successfully');
+        } catch (passwordError) {
+          console.error('Error updating password:', passwordError);
+          
+          if (axios.isAxiosError(passwordError) && passwordError.response?.data?.message) {
+            setErrors(prev => ({
+              ...prev,
+              currentPassword: passwordError.response?.data?.message || 'Current password is incorrect'
+            }));
+            // Return early to prevent the success message for profile update
+            return;
+          } else {
+            toast.error('Failed to update password');
+            // Return early to prevent the success message for profile update
+            return;
+          }
+        }
+      }
+      
       setIsEditing(false);
       
-     
+      // Reset password fields
       setFormData(prev => ({
         ...prev,
         currentPassword: '',
@@ -154,15 +214,7 @@ const UserProfile: React.FC = () => {
       console.error('Error updating profile:', error);
       
       if (axios.isAxiosError(error) && error.response?.data?.message) {
-       
-        if (error.response.data.message.includes('password')) {
-          setErrors(prev => ({
-            ...prev,
-            currentPassword: 'Current password is incorrect'
-          }));
-        } else {
-          toast.error(error.response.data.message);
-        }
+        toast.error(error.response.data.message);
       } else {
         toast.error('Failed to update profile');
       }
@@ -203,7 +255,6 @@ const UserProfile: React.FC = () => {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">User Profile</h1>
         
-       
         {authUser && (
           <div className="mb-6">
             <p className="text-gray-600">Welcome, {authUser.name}! Here you can manage your profile settings.</p>

@@ -16,7 +16,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  updateUser: (updatedUser: User) => void; 
+  updateUser: (updatedUser: User) => void;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -81,6 +82,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(updatedUser);
   };
 
+  
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      await axios.put('/auth/update-password', { 
+        currentPassword, 
+        newPassword 
+      });
+      
+    } catch (error) {
+      console.error('Error updating password:', error);
+      throw error; 
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -91,7 +106,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         register,
         logout,
-        updateUser
+        updateUser,
+        updatePassword
       }}
     >
       {children}
