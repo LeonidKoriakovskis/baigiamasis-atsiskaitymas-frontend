@@ -16,7 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  updateUser: (updatedUser: User) => void; // Add updateUser method
+  updateUser: (updatedUser: User) => void; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Load user data if token exists
+
   useEffect(() => {
     const loadUser = async () => {
       if (token) {
@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadUser();
   }, [token]);
 
-  // Login user
+ 
   const login = async (email: string, password: string) => {
     const res = await axios.post('/auth/login', { email, password });
     localStorage.setItem('token', res.data.token);
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsAuthenticated(true);
   };
 
-  // Register user
+  
   const register = async (name: string, email: string, password: string) => {
     const res = await axios.post('/auth/register', { name, email, password });
     localStorage.setItem('token', res.data.token);
@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsAuthenticated(true);
   };
 
-  // Logout user
+ 
   const logout = () => {
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsAuthenticated(false);
   };
 
-  // Update user
+
   const updateUser = (updatedUser: User) => {
     setUser(updatedUser);
   };

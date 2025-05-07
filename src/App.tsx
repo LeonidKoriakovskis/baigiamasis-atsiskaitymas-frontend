@@ -1,6 +1,8 @@
 import React, {  useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 
 // Components
@@ -47,9 +49,12 @@ const App: React.FC = () => {
         try {
           console.log('Testing projects endpoint directly...');
           const projectsResponse = await axios.get('/projects');
-          console.log('Projects endpoint response:', projectsResponse.data);
+          const projects = Array.isArray(projectsResponse.data) 
+            ? projectsResponse.data 
+            : projectsResponse.data.projects || [];
+          console.log('Projects endpoint response:', projects);
         } catch (projectsError) {
-          console.error('Projects endpoint test failed:', projectsError);
+          console.error('Projects endpoint test failed. Make sure the backend server is running at http://localhost:3000', projectsError);
         }
       }
     };
@@ -147,6 +152,17 @@ const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+          />
         </div>
       </Router>
     </AuthProvider>

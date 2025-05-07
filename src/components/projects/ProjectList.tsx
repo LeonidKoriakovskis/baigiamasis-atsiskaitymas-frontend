@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 interface Project {
   id: string;
-  _id?: string;  // Add _id field for MongoDB response
-  title: string; // Change name to title
-  name?: string; // Keep name for backward compatibility
+  _id?: string;  
+  title: string; 
+  name?: string; 
   description: string;
   status: string;
   createdAt: string;
   tasksCount: number;
   membersCount: number;
-  members?: string[]; // Add members array
+  members?: string[]; 
 }
 
 const ProjectList: React.FC = () => {
@@ -21,6 +22,10 @@ const ProjectList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [apiError, setApiError] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  
+  const canCreateProject = user && (user.role === 'admin' || user.role === 'manager');
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -29,7 +34,7 @@ const ProjectList: React.FC = () => {
         const response = await axios.get('/projects');
         console.log('API Response in ProjectList:', response.data);
         
-        // Check if response contains projects
+        
         if (!response.data) {
           console.error('Invalid API response format:', response.data);
           setApiError('Unexpected API response format');
@@ -38,7 +43,7 @@ const ProjectList: React.FC = () => {
           return;
         }
         
-        // Handle different response formats
+        
         const projectsArray = Array.isArray(response.data) 
           ? response.data 
           : response.data.projects || [];
@@ -53,40 +58,40 @@ const ProjectList: React.FC = () => {
         
         console.log('Projects array in ProjectList:', projectsArray);
         
-        // Map the response to ensure consistent field naming
+       
         const projectsWithBasicInfo = projectsArray.map((project: Project & { _id?: string }) => {
           console.log('Processing project in ProjectList:', project);
           return {
             id: project._id || project.id || '',
             title: project.title || project.name || '',
-            name: project.title || project.name || '', // Keep both for compatibility
+            name: project.title || project.name || '', 
             description: project.description || '',
             status: project.status || 'pending',
             createdAt: project.createdAt || new Date().toISOString(),
-            tasksCount: 0, // Will be updated with actual count
+            tasksCount: 0, 
             membersCount: project.membersCount || (project.members ? project.members.length : 0),
             members: project.members || []
           };
         });
         
-        // Fetch tasks for each project to get accurate counts
+        
         const projectsWithTasks = await Promise.all(
           projectsWithBasicInfo.map(async (project) => {
             try {
-              // Get tasks for this project
+              
               const tasksResponse = await axios.get(`/tasks/project/${project.id}`);
               const projectTasks = Array.isArray(tasksResponse.data) 
                 ? tasksResponse.data 
                 : tasksResponse.data.tasks || [];
               
-              // Update task count based on actual data
+              
               return {
                 ...project,
                 tasksCount: Array.isArray(projectTasks) ? projectTasks.length : 0
               };
             } catch (error) {
               console.log(`Could not fetch tasks for project ${project.id}:`, error);
-              return project; // Return project with default task count if fetch fails
+              return project; 
             }
           })
         );
@@ -150,27 +155,31 @@ const ProjectList: React.FC = () => {
         
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-          <Link 
-            to="/projects/new" 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Create Project
-          </Link>
+          {canCreateProject && (
+            <Link 
+              to="/projects/new" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Create Project
+            </Link>
+          )}
         </div>
         
         <div className="text-center py-12 bg-white shadow overflow-hidden sm:rounded-md">
           <h3 className="mt-2 text-sm font-medium text-gray-900">No projects found</h3>
-          <div className="mt-6">
-            <Link
-              to="/projects/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Create Project
-            </Link>
-          </div>
+          {canCreateProject && (
+            <div className="mt-6">
+              <Link
+                to="/projects/new"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                Create Project
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -188,12 +197,14 @@ const ProjectList: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-        <Link 
-          to="/projects/new" 
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          Create Project
-        </Link>
+        {canCreateProject && (
+          <Link 
+            to="/projects/new" 
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Create Project
+          </Link>
+        )}
       </div>
       
       <div className="mb-6 flex flex-col md:flex-row gap-4">
@@ -264,13 +275,13 @@ const ProjectList: React.FC = () => {
                           <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                           </svg>
-                          {project.membersCount} members
+                          {project.membersCount} member{project.membersCount !== 1 ? 's' : ''}
                         </p>
                         <p className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 sm:ml-6">
                           <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                            <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h10v10H5V5zm2 4h6v1H7V9zm6 3H7v-1h6v1z" clipRule="evenodd" />
                           </svg>
-                          {project.tasksCount} tasks
+                          {project.tasksCount} task{project.tasksCount !== 1 ? 's' : ''}
                         </p>
                       </div>
                       <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
@@ -278,7 +289,7 @@ const ProjectList: React.FC = () => {
                           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                         </svg>
                         <p>
-                          Created on <time dateTime={project.createdAt}>{new Date(project.createdAt).toLocaleDateString()}</time>
+                          Created <time dateTime={project.createdAt}>{new Date(project.createdAt).toLocaleDateString()}</time>
                         </p>
                       </div>
                     </div>
@@ -296,10 +307,10 @@ const ProjectList: React.FC = () => {
           <h3 className="mt-2 text-sm font-medium text-gray-900">No projects found</h3>
           <p className="mt-1 text-sm text-gray-500">
             {searchTerm || statusFilter !== 'all' 
-              ? 'Try adjusting your search or filter to find what you\'re looking for.' 
+              ? 'Try adjusting your search or filters to find what you\'re looking for.' 
               : 'Get started by creating a new project.'}
           </p>
-          {!searchTerm && statusFilter === 'all' && (
+          {canCreateProject && !searchTerm && statusFilter === 'all' && (
             <div className="mt-6">
               <Link
                 to="/projects/new"

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import CommentList from '../comments/CommentList';
+import CommentForm from '../comments/CommentForm';
+import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
 
 interface Task {
   id: string;
@@ -40,13 +44,26 @@ interface User {
   name: string;
 }
 
+interface Comment {
+  _id: string;
+  text: string;
+  author: {
+    _id: string;
+    name: string;
+  };
+  taskId: string;
+  timestamp: string;
+}
+
 const TaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [task, setTask] = useState<Task | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [newComment, setNewComment] = useState<Comment | undefined>(undefined);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -56,15 +73,18 @@ const TaskDetail: React.FC = () => {
     assignedToId: ''
   });
 
+
+  const canModifyTask = user && (user.role === 'admin' || user.role === 'manager');
+
   useEffect(() => {
     const fetchTaskDetails = async () => {
       try {
-        // Try both the direct get by ID and by searching in projects
+      
         let taskResponse = null;
         let projectData = null;
         let foundTask = false;
         
-        // First, fetch all projects to have project data available
+   
         let allProjects = [];
         try {
           const projectsResponse = await axios.get('/projects');
@@ -77,11 +97,11 @@ const TaskDetail: React.FC = () => {
         }
         
         try {
-          // First try to get the task directly
+        
           taskResponse = await axios.get(`/tasks/${id}`);
           foundTask = true;
           
-          // If the task has projectId, find the project
+          
           if (taskResponse.data && (taskResponse.data.projectId || taskResponse.data.project)) {
             const projectId = taskResponse.data.projectId || taskResponse.data.project;
             projectData = allProjects.find((p: { _id?: string; id?: string }) => (p._id === projectId || p.id === projectId));
@@ -99,20 +119,20 @@ const TaskDetail: React.FC = () => {
         } catch (directError) {
           console.error('Error fetching task directly:', directError);
           
-          // If direct fetch fails, try to find the task by searching through all projects
+        
           if (allProjects.length > 0) {
-            // Try each project to find the task
+          
             for (const project of allProjects) {
               if (foundTask) break;
               
               try {
                 const projectId = project._id || project.id;
-                projectData = project; // Store project data for later use
+                projectData = project; 
                 const projectTasksResponse = await axios.get(`/tasks/project/${projectId}`);
                 const projectTasks = projectTasksResponse.data.tasks || projectTasksResponse.data || [];
                 
                 if (Array.isArray(projectTasks)) {
-                  // Find the task in the project's tasks
+                
                   const matchingTask = projectTasks.find((task: TaskResponse) => 
                     (task._id === id || task.id === id)
                   );
@@ -130,38 +150,38 @@ const TaskDetail: React.FC = () => {
           }
         }
         
-        // Fetch users for task assignment
+      
         await fetchUsers();
         
         if (foundTask && taskResponse?.data) {
-          // Handle different response formats
+      
           let taskData = null;
           
           if (taskResponse.data.task) {
-            // Response with nested task object
+         
             taskData = taskResponse.data.task;
           } else if (taskResponse.data._id || taskResponse.data.id) {
-            // Response with direct task data
+        
             taskData = taskResponse.data;
           }
           
           if (taskData) {
-            // If we have the project data from earlier, use it to get project name
+        
             let projectName = 'Unknown Project';
-            // Extract project ID ensuring it's a string, not an object
+           
             const rawProjectId = taskData.projectId || taskData.project || '';
-            // Make sure we have a string project ID, not an object
+           
             const projectId = typeof rawProjectId === 'object' && rawProjectId !== null 
               ? (rawProjectId._id || rawProjectId.id || '') 
               : rawProjectId;
             
             console.log('Project ID extracted for task:', projectId, 'type:', typeof projectId);
             
-            // First try to get project name from task data
+           
             if (taskData.projectName) {
               projectName = taskData.projectName;
             } else if (projectId) {
-              // Try to find project in the already fetched projects list
+           
               const foundProject = allProjects.find((p: { _id?: string; id?: string; title?: string; name?: string }) => 
                 p._id === projectId || p.id === projectId
               );
@@ -171,16 +191,16 @@ const TaskDetail: React.FC = () => {
                 projectName = foundProject.title || foundProject.name || 'Unknown Project';
                 console.log('Found project in list:', projectName);
               }
-              // Use project data to get name if found but not in list
+              
               else if (projectData) {
                 projectName = projectData.title || projectData.name || 'Unknown Project';
                 console.log('Using project data from earlier fetch:', projectName);
               } 
-              // Final attempt - direct project fetch
+              
               else {
                 try {
                   console.log('Trying to fetch project directly with ID:', projectId);
-                  // Only try to fetch if we have a valid string ID
+                 
                   if (typeof projectId === 'string' && projectId.length > 0) {
                     const projectRes = await axios.get(`/projects/${projectId}`);
                     projectData = projectRes.data.project || projectRes.data;
@@ -188,16 +208,18 @@ const TaskDetail: React.FC = () => {
                     console.log('Project fetched directly:', projectName);
                   } else {
                     console.log('Invalid project ID, cannot fetch project');
+                    toast.warning('Could not load related project details');
                   }
                 } catch (err) {
                   console.error('Error fetching project details:', err);
+                  toast.warning('Could not load related project details');
                 }
               }
             }
             
             console.log('Final project name to use:', projectName);
             
-            // Create a standardized task object
+            
             const standardizedTask = {
               id: taskData._id || taskData.id || id,
               title: taskData.title || 'Untitled Task',
@@ -229,26 +251,29 @@ const TaskDetail: React.FC = () => {
             });
           } else {
             console.error('Could not parse task data from response:', taskResponse.data);
+            toast.error('Error loading task details');
           }
         } else {
-          // Task not found by any method
+          
           console.error('Task not found by any method');
+          toast.error('Task not found');
         }
       } catch (error) {
         console.error('Error in task fetching process:', error);
+        toast.error('Error loading task details');
       } finally {
         setIsLoading(false);
       }
     };
     
-    // Function to fetch users, similar to TaskNew component
+   
     const fetchUsers = async () => {
       try {
         const usersRes = await axios.get('/users');
         const userData = usersRes.data.users || usersRes.data || [];
         console.log('Users fetched:', userData);
         
-        // Map users to consistent format
+        
         const formattedUsers = userData.map((user: { _id?: string; id?: string; name?: string; username?: string; email?: string }) => ({
           id: user._id || user.id || '',
           name: user.name || user.username || 'Unknown User',
@@ -260,11 +285,11 @@ const TaskDetail: React.FC = () => {
         console.error('Error with primary users endpoint:', firstErr);
         
         try {
-          // Try alternative endpoint
+        
           const usersRes = await axios.get('/auth/users');
           const userData = usersRes.data.users || usersRes.data || [];
           
-          // Map users to consistent format
+          
           const formattedUsers = userData.map((user: { _id?: string; id?: string; name?: string; username?: string; email?: string }) => ({
             id: user._id || user.id || '',
             name: user.name || user.username || 'Unknown User',
@@ -293,7 +318,7 @@ const TaskDetail: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Prepare task data for submission
+      
       const taskData = {
         title: formData.title,
         description: formData.description,
@@ -305,27 +330,27 @@ const TaskDetail: React.FC = () => {
       
       console.log('Updating task with data:', taskData);
       
-      // Try both potential update endpoints
+     
       let response;
       let success = false;
       
       try {
-        // First try the direct endpoint
+        
         response = await axios.put(`/tasks/${id}`, taskData);
         success = true;
       } catch (err) {
         console.error('Error with direct task update endpoint:', err);
         
-        // Try to find which project this task belongs to
+       
         if (task?.projectId) {
-          // Make sure we have a string project ID, not an object
+         
           const projectId = typeof task.projectId === 'object' && task.projectId !== null
             ? ((task.projectId as { _id?: string; id?: string })._id || (task.projectId as { _id?: string; id?: string }).id || '')
             : task.projectId;
             
           if (typeof projectId === 'string' && projectId.length > 0) {
             try {
-              // Try project-specific task endpoint
+              
               response = await axios.put(`/tasks/project/${projectId}/${id}`, taskData);
               success = true;
             } catch (err2) {
@@ -344,7 +369,7 @@ const TaskDetail: React.FC = () => {
       if (success && response?.data) {
         console.log('Task update response:', response.data);
         
-        // Handle different response formats
+        
         let updatedTaskData;
         if (response.data.task) {
           updatedTaskData = response.data.task;
@@ -353,7 +378,7 @@ const TaskDetail: React.FC = () => {
         }
         
         if (updatedTaskData) {
-          // Find assigned user name if we have a user ID
+         
           let assignedUserName = 'Unassigned';
           const assignedUserId = formData.assignedToId || 
             (typeof updatedTaskData.assignedTo === 'string' ? updatedTaskData.assignedTo : 
@@ -368,16 +393,16 @@ const TaskDetail: React.FC = () => {
             }
           }
           
-          // Extract project ID properly, ensuring it's a string
+         
           const rawProjectId = updatedTaskData.projectId || task?.projectId || '';
           const projectId = typeof rawProjectId === 'object' && rawProjectId !== null
             ? ((rawProjectId as { _id?: string; id?: string })._id || (rawProjectId as { _id?: string; id?: string }).id || '')
             : rawProjectId;
           
-          // Ensure we preserve the project name
+          
           const projectName = updatedTaskData.projectName || task?.projectName || 'Unknown Project';
           
-          // Create a standardized task object
+          
           const standardizedTask = {
             id: updatedTaskData._id || updatedTaskData.id || id,
             title: updatedTaskData.title || formData.title,
@@ -398,17 +423,19 @@ const TaskDetail: React.FC = () => {
           console.log('Updated task with preserved project name:', standardizedTask);
           setTask(standardizedTask);
           setIsEditing(false);
+          toast.success('Task updated successfully');
         }
       }
     } catch (error) {
       console.error('Error updating task:', error);
+      toast.error('Failed to update task. Please try again.');
     }
   };
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
       try {
-        // Try both potential delete endpoints
+      
         let success = false;
         
         try {
@@ -418,10 +445,10 @@ const TaskDetail: React.FC = () => {
         } catch (err) {
           console.error('Error with direct task delete endpoint:', err);
           
-          // Try to find which project this task belongs to
+        
           if (task?.projectId) {
             try {
-              // Try project-specific task endpoint
+             
               await axios.delete(`/tasks/project/${task.projectId}/${id}`);
               success = true;
             } catch (err2) {
@@ -434,10 +461,12 @@ const TaskDetail: React.FC = () => {
         }
         
         if (success) {
+          toast.success('Task deleted successfully');
           navigate('/tasks');
         }
       } catch (error) {
         console.error('Error deleting task:', error);
+        toast.error('Failed to delete task. Please try again.');
       }
     }
   };
@@ -469,6 +498,11 @@ const TaskDetail: React.FC = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handleCommentAdded = (comment: Comment) => {
+    
+    setNewComment(comment);
   };
 
   if (isLoading) {
@@ -511,7 +545,7 @@ const TaskDetail: React.FC = () => {
         </Link>
       </div>
 
-      {isEditing ? (
+      {isEditing && canModifyTask ? (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
           <div className="px-4 py-5 sm:px-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Edit Task</h3>
@@ -645,26 +679,28 @@ const TaskDetail: React.FC = () => {
                 Task details and information
               </p>
             </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setIsEditing(true)}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg className="-ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-                Edit
-              </button>
-              <button
-                onClick={handleDelete}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                <svg className="-ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                Delete
-              </button>
-            </div>
+            {canModifyTask && (
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg className="-ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  <svg className="-ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
           <div className="border-t border-gray-200">
             <dl>
@@ -725,6 +761,13 @@ const TaskDetail: React.FC = () => {
             </dl>
           </div>
         </div>
+      )}
+      
+      {!isLoading && task && id && (
+        <>
+          <CommentForm taskId={id} onCommentAdded={handleCommentAdded} />
+          <CommentList taskId={id} newComment={newComment} />
+        </>
       )}
     </div>
   );

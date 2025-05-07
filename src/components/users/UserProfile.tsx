@@ -12,7 +12,7 @@ interface UserData {
   updatedAt: string;
 }
 
-// Define a type for the update data
+
 interface UpdateUserData {
   name: string;
   email: string;
@@ -43,11 +43,11 @@ const UserProfile: React.FC = () => {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const response = await axios.get('/users/profile');
-        setUserData(response.data.user);
+        const response = await axios.get('/auth/profile');
+        setUserData(response.data.user || response.data);
         setFormData({
-          name: response.data.user.name,
-          email: response.data.user.email,
+          name: (response.data.user || response.data).name,
+          email: (response.data.user || response.data).email,
           currentPassword: '',
           newPassword: '',
           confirmPassword: '',
@@ -70,7 +70,7 @@ const UserProfile: React.FC = () => {
       [name]: value
     }));
     
-    // Clear error when user types
+  
     if (errors[name as keyof typeof errors]) {
       setErrors(prev => ({
         ...prev,
@@ -135,13 +135,13 @@ const UserProfile: React.FC = () => {
         updateData.newPassword = formData.newPassword;
       }
       
-      const response = await axios.put('/users/profile', updateData);
+      const response = await axios.put('/auth/profile', updateData);
       
-      setUserData(response.data.user);
-      updateUser(response.data.user);
+      setUserData(response.data.user || response.data);
+      updateUser(response.data.user || response.data);
       setIsEditing(false);
       
-      // Reset password fields
+     
       setFormData(prev => ({
         ...prev,
         currentPassword: '',
@@ -154,7 +154,7 @@ const UserProfile: React.FC = () => {
       console.error('Error updating profile:', error);
       
       if (axios.isAxiosError(error) && error.response?.data?.message) {
-        // Handle specific error messages from the server
+       
         if (error.response.data.message.includes('password')) {
           setErrors(prev => ({
             ...prev,
@@ -203,7 +203,7 @@ const UserProfile: React.FC = () => {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">User Profile</h1>
         
-        {/* Display a welcome message using the authUser */}
+       
         {authUser && (
           <div className="mb-6">
             <p className="text-gray-600">Welcome, {authUser.name}! Here you can manage your profile settings.</p>

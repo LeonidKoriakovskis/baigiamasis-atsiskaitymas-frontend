@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
 
 interface User {
   _id: string;
@@ -24,13 +25,13 @@ const ProjectNew: React.FC = () => {
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [userError, setUserError] = useState('');
 
-  // Fetch available users for member assignment
+ 
   useEffect(() => {
     const fetchUsers = async () => {
       setIsLoadingUsers(true);
       setUserError('');
       try {
-        // Try different endpoints for user data
+       
         let response;
         try {
           response = await axios.get('/users');
@@ -44,11 +45,12 @@ const ProjectNew: React.FC = () => {
           } catch (secondErr) {
             console.error('Error fetching from /auth/users:', secondErr);
             setUserError('Could not load users. You can still create the project.');
+            toast.warning('Could not load users. You can still create the project.');
           }
         }
         
         if (response && response.data) {
-          // Try to extract users from different possible response formats
+          
           const users = response.data.users || 
                       response.data.data || 
                       (Array.isArray(response.data) ? response.data : []);
@@ -59,6 +61,7 @@ const ProjectNew: React.FC = () => {
       } catch (err) {
         console.error('Error fetching users:', err);
         setUserError('Could not load users. You can still create the project.');
+        toast.warning('Could not load users. You can still create the project.');
       } finally {
         setIsLoadingUsers(false);
       }
@@ -86,27 +89,32 @@ const ProjectNew: React.FC = () => {
     setError('');
 
     try {
-      // Add the user ID as createdBy and include members
+      
       const projectData = {
         ...formData,
-        createdBy: user?._id, // Using _id as per User interface in AuthContext
-        members: [...selectedMembers, user?._id] // Add current user and selected members
+        createdBy: user?._id, 
+        members: [...selectedMembers, user?._id] 
       };
       
       const response = await axios.post('/projects', projectData);
-      // Check the response structure and navigate to the correct path
+      
+     
+      toast.success('Project created successfully');
+      
+      
       if (response.data && response.data.project) {
         navigate(`/projects/${response.data.project.id || response.data.project._id}`);
       } else if (response.data && response.data._id) {
-        // Alternative response format
+        
         navigate(`/projects/${response.data._id}`);
       } else {
-        // If can't determine ID, just go back to projects list
+        
         navigate('/projects');
       }
     } catch (err) {
       console.error('Error creating project:', err);
       setError('Failed to create project. Please try again.');
+      toast.error('Failed to create project. Please try again.');
       setIsSubmitting(false);
     }
   };

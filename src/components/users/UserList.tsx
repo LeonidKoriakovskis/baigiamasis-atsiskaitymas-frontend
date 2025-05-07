@@ -31,6 +31,7 @@ const UserList: React.FC = () => {
     email: '',
     role: 'user',
     password: '',
+    confirmPassword: '',
   });
 
   useEffect(() => {
@@ -40,11 +41,36 @@ const UserList: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
+      console.log('Fetching users from /users endpoint');
+      
+      
       const response = await axios.get('/users');
-      setUsers(response.data.users);
+      console.log('Users API response:', response.data);
+      
+      
+      const usersData = Array.isArray(response.data) 
+        ? response.data 
+        : response.data.users || [];
+      
+      console.log('Processed users data:', usersData);
+      setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to load users');
+      
+      
+      if (currentUser && currentUser.role === 'admin') {
+        console.log('Falling back to showing only the current admin user');
+        setUsers([{
+          _id: currentUser._id,
+          name: currentUser.name,
+          email: currentUser.email,
+          role: currentUser.role,
+          createdAt: new Date().toISOString()
+        }]);
+      } else {
+        setUsers([]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +99,7 @@ const UserList: React.FC = () => {
       email: '',
       role: 'user',
       password: '',
+      confirmPassword: '',
     });
     setIsModalOpen(true);
   };
@@ -84,6 +111,7 @@ const UserList: React.FC = () => {
       email: user.email,
       role: user.role,
       password: '',
+      confirmPassword: '',
     });
     setIsModalOpen(true);
   };
@@ -91,9 +119,15 @@ const UserList: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate passwords match
+    if (!selectedUser && formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
     try {
       if (selectedUser) {
-        // Update existing user
+        
         const updateData: UpdateUserData = {
           name: formData.name,
           email: formData.email,
@@ -104,11 +138,25 @@ const UserList: React.FC = () => {
           updateData.password = formData.password;
         }
         
+        console.log(`Updating user at /users/${selectedUser._id}`, updateData);
         await axios.put(`/users/${selectedUser._id}`, updateData);
         toast.success('User updated successfully');
       } else {
-        // Create new user
-        await axios.post('/users', formData);
+       
+        console.log('Creating new user at /auth/register', {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          password: formData.password
+        });
+        
+        await axios.post('/auth/register', {
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role 
+        });
+        
         toast.success('User created successfully');
       }
       
@@ -130,6 +178,7 @@ const UserList: React.FC = () => {
     }
     
     try {
+      console.log(`Deleting user at /users/${userId}`);
       await axios.delete(`/users/${userId}`);
       toast.success('User deleted successfully');
       fetchUsers();
@@ -139,12 +188,12 @@ const UserList: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users && users.length > 0 ? users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
     return matchesSearch && matchesRole;
-  });
+  }) : [];
 
   if (isLoading) {
     return (
@@ -203,6 +252,7 @@ const UserList: React.FC = () => {
               >
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
                 <option value="user">User</option>
               </select>
             </div>
@@ -337,6 +387,7 @@ const UserList: React.FC = () => {
                             className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
                             <option value="user">User</option>
+                            <option value="manager">Manager</option>
                             <option value="admin">Admin</option>
                           </select>
                         </div>
@@ -351,6 +402,21 @@ const UserList: React.FC = () => {
                             id="password"
                             required={!selectedUser}
                             value={formData.password}
+                            onChange={handleInputChange}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                            {selectedUser ? 'Confirm New Password' : 'Confirm Password'}
+                          </label>
+                          <input
+                            type="password"
+                            name="confirmPassword"
+                            id="confirmPassword"
+                            required={!selectedUser}
+                            value={formData.confirmPassword}
                             onChange={handleInputChange}
                             className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
                           />

@@ -23,7 +23,7 @@ interface Task {
   projectName?: string;
 }
 
-// Interface for task data from API
+
 interface TaskApiResponse {
   _id?: string;
   id?: string;
@@ -36,7 +36,7 @@ interface TaskApiResponse {
   project?: string;
 }
 
-// Interface for project data from API
+
 interface ProjectApiResponse {
   _id?: string;
   id?: string;
@@ -67,7 +67,7 @@ const Dashboard: React.FC = () => {
           const projectsResponse = await axios.get('/projects?limit=5&sort=createdAt:desc');
           console.log('Dashboard projects response:', projectsResponse.data);
           
-          // Handle response which could be an array directly or nested in 'projects' property
+        
           const projectsArray = Array.isArray(projectsResponse.data) 
             ? projectsResponse.data 
             : projectsResponse.data.projects || [];
@@ -91,11 +91,11 @@ const Dashboard: React.FC = () => {
           console.error('Error fetching projects in Dashboard:', projectError);
         }
         
-        // Try to fetch tasks assigned to the user
+       
         let tasksData: Task[] = [];
         let foundTasks = false;
         
-        // Fetch tasks from all projects
+        
         if (projectsData.length > 0) {
           const allProjectTasks: TaskApiResponse[] = [];
           
@@ -110,7 +110,7 @@ const Dashboard: React.FC = () => {
                   ? projectTasksResponse.data 
                   : projectTasksResponse.data.tasks || [];
                 
-                // Add project name to each task
+                
                 const tasksWithProject = projectTasks.map((task: TaskApiResponse) => ({
                   ...task,
                   projectId: projectId,
@@ -126,7 +126,7 @@ const Dashboard: React.FC = () => {
           }
           
           if (allProjectTasks.length > 0) {
-            // Map tasks to a consistent format
+            
             tasksData = allProjectTasks.map((task: TaskApiResponse & { projectName?: string }) => ({
               id: task._id || task.id || '',
               _id: task._id || task.id || '',
@@ -141,17 +141,17 @@ const Dashboard: React.FC = () => {
           }
         }
         
-        // Try the old paths for backward compatibility
+      
         if (!foundTasks && user?._id) {
           try {
-            // First try user-specific tasks endpoint
+          
             const tasksResponse = await axios.get(`/tasks/user/${user._id}`);
             if (tasksResponse?.data) {
               const tasksArray = Array.isArray(tasksResponse.data) 
                 ? tasksResponse.data 
                 : tasksResponse.data.tasks || [];
               
-              // Map tasks to a consistent format
+             
               const userTasks: Task[] = tasksArray.map((task: TaskApiResponse) => ({
                 id: task._id || task.id || '',
                 _id: task._id || task.id || '',
@@ -164,7 +164,7 @@ const Dashboard: React.FC = () => {
                 projectName: ''
               }));
               
-              // Get project names for tasks if possible
+              
               if (projectsData.length > 0) {
                 const tasksWithProjectNames = userTasks.map((task: Task) => {
                   const relatedProject = projectsData.find((p: Project) => p.id === task.projectId);
@@ -186,17 +186,17 @@ const Dashboard: React.FC = () => {
           }
         }
         
-        // If still no tasks, try the general tasks endpoint
+     
         if (!foundTasks) {
           try {
-            // Try general tasks endpoint with limit
+           
             const tasksResponse = await axios.get('/tasks?limit=5');
             if (tasksResponse?.data) {
               const tasksArray = Array.isArray(tasksResponse.data) 
                 ? tasksResponse.data 
                 : tasksResponse.data.tasks || [];
               
-              // Map tasks to a consistent format
+              
               const generalTasks: Task[] = tasksArray.map((task: TaskApiResponse) => ({
                 id: task._id || task.id || '',
                 _id: task._id || task.id || '',
@@ -209,7 +209,7 @@ const Dashboard: React.FC = () => {
                 projectName: ''
               }));
               
-              // Get project names for tasks if possible
+            
               if (projectsData.length > 0) {
                 const tasksWithProjectNames = generalTasks.map((task: Task) => {
                   const relatedProject = projectsData.find((p: Project) => p.id === task.projectId);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
 
 interface Task {
   id: string;
@@ -40,19 +42,23 @@ const TaskList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const { user } = useAuth();
+
+ 
+  const canCreateTask = user && (user.role === 'admin' || user.role === 'manager');
 
   useEffect(() => {
     const fetchTasks = async () => {
       try {
         setIsLoading(true);
         
-        // First get all projects
+      
         const projectsResponse = await axios.get('/projects');
         const projects = Array.isArray(projectsResponse.data) 
           ? projectsResponse.data 
           : projectsResponse.data.projects || [];
         
-        // Fetch tasks for each project
+      
         const allTasks: Task[] = [];
         
         for (const project of projects) {
@@ -60,12 +66,12 @@ const TaskList: React.FC = () => {
             const projectId = project._id || project.id;
             const projectName = project.title || project.name || 'Unknown Project';
             
-            // Get tasks for this project
+           
             const taskResponse = await axios.get(`/tasks/project/${projectId}`);
             const projectTasks = taskResponse.data.tasks || taskResponse.data || [];
             
             if (Array.isArray(projectTasks)) {
-              // Map tasks to include project information
+           
               const formattedTasks = projectTasks.map((task: TaskResponse) => ({
                 id: task._id || task.id || '',
                 title: task.title || 'Untitled Task',
@@ -90,6 +96,7 @@ const TaskList: React.FC = () => {
         setTasks(allTasks);
       } catch (error) {
         console.error('Error fetching tasks:', error);
+        toast.error('Error fetching tasks. Please try again later.');
       } finally {
         setIsLoading(false);
       }
@@ -127,14 +134,21 @@ const TaskList: React.FC = () => {
     }
   };
 
-  const filteredTasks = tasks.filter(task => {
+  const filteredTasks = tasks && tasks.length > 0 ? tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          task.description.toLowerCase().includes(searchTerm.toLowerCase());
+                        task.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status.toLowerCase() === statusFilter.toLowerCase();
     const matchesPriority = priorityFilter === 'all' || task.priority.toLowerCase() === priorityFilter.toLowerCase();
     
     return matchesSearch && matchesStatus && matchesPriority;
-  });
+  }) : [];
+  
+  
+  useEffect(() => {
+    if (tasks.length > 0 && filteredTasks.length === 0 && (searchTerm || statusFilter !== 'all' || priorityFilter !== 'all')) {
+      toast.info('No tasks match your current filters.');
+    }
+  }, [filteredTasks.length, searchTerm, statusFilter, priorityFilter, tasks.length]);
 
   if (isLoading) {
     return (
@@ -148,12 +162,14 @@ const TaskList: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-        <Link 
-          to="/tasks/new" 
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          Create Task
-        </Link>
+        {canCreateTask && (
+          <Link 
+            to="/tasks/new" 
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Create Task
+          </Link>
+        )}
       </div>
       
       <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -190,8 +206,6 @@ const TaskList: React.FC = () => {
             <option value="todo">To Do</option>
             <option value="in-progress">In Progress</option>
             <option value="done">Done</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
           </select>
         </div>
         
@@ -280,7 +294,7 @@ const TaskList: React.FC = () => {
               ? 'Try adjusting your search or filters to find what you\'re looking for.' 
               : 'Get started by creating a new task.'}
           </p>
-          {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
+          {canCreateTask && !searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
             <div className="mt-6">
               <Link
                 to="/tasks/new"

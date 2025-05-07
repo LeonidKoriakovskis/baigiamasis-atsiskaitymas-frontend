@@ -38,20 +38,18 @@ const Navbar: React.FC = () => {
                     >
                       Projects
                     </Link>
+                    <Link
+                      to="/tasks"
+                      className="text-white hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Tasks
+                    </Link>
                     {user.role === 'admin' && (
                       <Link
                         to="/users"
                         className="text-white hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium"
                       >
                         Users
-                      </Link>
-                    )}
-                     {user.role === 'admin' && (
-                      <Link
-                        to="/tasks"
-                        className="text-white hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium"
-                      >
-                        Tasks
                       </Link>
                     )}
                   </>
@@ -157,6 +155,13 @@ const Navbar: React.FC = () => {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Projects
+                </Link>
+                <Link
+                  to="/tasks"
+                  className="text-white hover:bg-indigo-500 block px-3 py-2 rounded-md text-base font-medium"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Tasks
                 </Link>
                 {user.role === 'admin' && (
                   <Link

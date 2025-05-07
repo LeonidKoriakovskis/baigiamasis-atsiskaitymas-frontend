@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
 
 interface User {
   _id: string;
@@ -51,7 +52,7 @@ const TaskNew: React.FC = () => {
     description: '',
     status: 'todo',
     priority: 'medium',
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default to 1 week from now
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], 
     assignedTo: '',
     projectId: projectIdFromUrl || ''
   });
@@ -62,7 +63,7 @@ const TaskNew: React.FC = () => {
       setError('');
       
       try {
-        // Fetch all projects first (for project selection if needed)
+       
         const projectsRes = await axios.get('/projects');
         const projectsList = Array.isArray(projectsRes.data) 
           ? projectsRes.data 
@@ -70,14 +71,14 @@ const TaskNew: React.FC = () => {
           
         setProjects(projectsList);
         
-        // If we have a project ID from URL, fetch that specific project details
+        
         if (projectIdFromUrl) {
           try {
             const projectRes = await axios.get(`/projects/${projectIdFromUrl}`);
             const projectData = projectRes.data.project || projectRes.data;
             setProjectName(projectData.title || projectData.name || 'Project');
             
-            // Try to use project members for user list if available
+            
             if (projectData.members && Array.isArray(projectData.members)) {
               const memberData = projectData.members
                 .filter((m: ProjectMember | string) => typeof m !== 'string')
@@ -96,14 +97,16 @@ const TaskNew: React.FC = () => {
             }
           } catch (err) {
             console.error('Error fetching project details:', err);
+            toast.error('Failed to load project details. Using default settings.');
             await fetchUsers();
           }
         } else {
-          // No project ID, just fetch users
+          
           await fetchUsers();
         }
       } catch (err) {
         console.error('Error fetching data:', err);
+        toast.error('Failed to load project data. Please try again.');
         setError('Failed to load data. Please try again.');
       } finally {
         setIsLoading(false);
@@ -120,6 +123,7 @@ const TaskNew: React.FC = () => {
           setUsers(usersRes.data.users || usersRes.data || []);
         } catch (secondErr) {
           console.error('Could not fetch users:', secondErr);
+          toast.warning('Could not fetch users list. Tasks can be created but not assigned.');
         }
       }
     };
@@ -134,7 +138,7 @@ const TaskNew: React.FC = () => {
       [name]: value
     }));
     
-    // Update project name when selecting a different project
+    
     if (name === 'projectId' && value) {
       const selectedProject = projects.find(p => p._id === value || p.id === value);
       if (selectedProject) {
@@ -146,7 +150,7 @@ const TaskNew: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate that a project is selected
+  
     if (!formData.projectId) {
       setError('Please select a project for this task');
       return;
@@ -166,66 +170,66 @@ const TaskNew: React.FC = () => {
         projectId: formData.projectId
       };
       
-      // Only add assignedTo if it's not empty
+      
       if (formData.assignedTo) {
         taskData.assignedTo = formData.assignedTo;
-        // Also include as assignedToId for backward compatibility
+        
         taskData.assignedToId = formData.assignedTo;
       }
       
-      // Add creator if available
+      
       if (user?._id) {
         taskData.createdBy = user._id;
       }
       
-      // Try multiple potential endpoints for creating tasks
+      
       let response = null;
       let success = false;
       
       try {
-        // Try the correct endpoint based on backend implementation
+        
         response = await axios.post(`/tasks/project/${formData.projectId}`, taskData);
         success = true;
       } catch (err) {
         console.error('Error with correct tasks endpoint:', err);
         
-        // Try fallback endpoints for compatibility
+        
         try {
-          // Try standard tasks endpoint
+          
           response = await axios.post('/tasks', taskData);
           success = true;
         } catch (err2) {
           console.error('Error with standard tasks endpoint:', err2);
           
           try {
-            // Try project-specific task endpoint
+            
             response = await axios.post(`/projects/${formData.projectId}/tasks`, taskData);
             success = true;
           } catch (err3) {
             console.error('Error with project tasks endpoint:', err3);
             
-            // Re-throw to be caught by outer catch
+            
             throw err3;
           }
         }
       }
       
-      // Navigate to the task detail or back to project
+     
       if (success && response?.data) {
-        // Try to get the task ID from the response data
+        
         let taskId;
         
         if (response.data.task) {
-          // Get from task object
+          
           taskId = response.data.task._id || response.data.task.id;
         } else if (response.data._id) {
-          // Direct ID in response
+         
           taskId = response.data._id;
         } else if (response.data.id) {
-          // Direct ID in response
+          
           taskId = response.data.id;
         } else {
-          // Last fallback - look for any field that could be the ID
+          
           const possibleIdFields = ['_id', 'id', 'taskId', 'task_id'];
           for (const field of possibleIdFields) {
             if (response.data[field]) {
@@ -235,21 +239,25 @@ const TaskNew: React.FC = () => {
           }
         }
         
-        // Navigate based on whether we found an ID
+        
         if (taskId) {
           console.log(`Navigating to task detail: /tasks/${taskId}`);
+          toast.success('Task created successfully!');
           navigate(`/tasks/${taskId}`);
         } else {
-          // If we can't determine the task ID, go back to the project
+          
           console.log(`No task ID found, returning to project: /projects/${formData.projectId}`);
+          toast.success('Task created successfully! Returning to project.');
           navigate(`/projects/${formData.projectId}`);
         }
       } else {
-        // If we can't determine the task ID, go back to the project
+        
+        toast.success('Task created successfully! Returning to project.');
         navigate(`/projects/${formData.projectId}`);
       }
     } catch (err) {
       console.error('Error creating task:', err);
+      toast.error('Failed to create task. Please try again.');
       setError('Failed to create task. Please try again.');
       setIsSubmitting(false);
     }
@@ -286,7 +294,7 @@ const TaskNew: React.FC = () => {
         )}
         
         <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
-          {/* Project Selection (only shown if no project ID in URL) */}
+         
           {!projectIdFromUrl && (
             <div className="mb-4">
               <label htmlFor="projectId" className="block text-sm font-medium text-gray-700 mb-1">
