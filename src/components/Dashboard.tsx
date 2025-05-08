@@ -83,7 +83,7 @@ const Dashboard: React.FC = () => {
               status: project.status || 'pending',
               createdAt: project.createdAt || new Date().toISOString()
             };
-          });
+          }).slice(0, 5); // Limit to 5 projects
           
           console.log('Mapped projects in Dashboard:', mappedProjects);
           projectsData = mappedProjects;
@@ -137,7 +137,7 @@ const Dashboard: React.FC = () => {
               dueDate: task.dueDate || new Date().toISOString(),
               projectId: task.projectId || task.project || '',
               projectName: task.projectName || 'Unknown Project'
-            }));
+            })).slice(0, 5); // Limit to 5 tasks
           }
         }
         
@@ -145,7 +145,7 @@ const Dashboard: React.FC = () => {
         if (!foundTasks && user?._id) {
           try {
           
-            const tasksResponse = await axios.get(`/tasks/user/${user._id}`);
+            const tasksResponse = await axios.get(`/tasks/user/${user._id}?limit=5`);
             if (tasksResponse?.data) {
               const tasksArray = Array.isArray(tasksResponse.data) 
                 ? tasksResponse.data 
@@ -162,7 +162,7 @@ const Dashboard: React.FC = () => {
                 dueDate: task.dueDate || new Date().toISOString(),
                 projectId: task.projectId || task.project || '',
                 projectName: ''
-              }));
+              })).slice(0, 5); // Limit to 5 tasks
               
               
               if (projectsData.length > 0) {
@@ -174,10 +174,10 @@ const Dashboard: React.FC = () => {
                   };
                 });
                 
-                tasksData = [...tasksData, ...tasksWithProjectNames];
+                tasksData = [...tasksData, ...tasksWithProjectNames].slice(0, 5); // Limit combined tasks to 5
                 foundTasks = true;
               } else {
-                tasksData = [...tasksData, ...userTasks];
+                tasksData = [...tasksData, ...userTasks].slice(0, 5); // Limit combined tasks to 5
                 foundTasks = true;
               }
             }
@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
                 dueDate: task.dueDate || new Date().toISOString(),
                 projectId: task.projectId || task.project || '',
                 projectName: ''
-              }));
+              })).slice(0, 5); // Limit to 5 tasks
               
             
               if (projectsData.length > 0) {
@@ -219,9 +219,9 @@ const Dashboard: React.FC = () => {
                   };
                 });
                 
-                tasksData = [...tasksData, ...tasksWithProjectNames];
+                tasksData = [...tasksData, ...tasksWithProjectNames].slice(0, 5); // Limit combined tasks to 5
               } else {
-                tasksData = [...tasksData, ...generalTasks];
+                tasksData = [...tasksData, ...generalTasks].slice(0, 5); // Limit combined tasks to 5
               }
             }
           } catch {
