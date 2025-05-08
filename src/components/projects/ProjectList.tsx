@@ -13,7 +13,13 @@ interface Project {
   createdAt: string;
   tasksCount: number;
   membersCount: number;
-  members?: string[]; 
+  members?: (ProjectMember | string)[]; 
+}
+
+interface ProjectMember {
+  _id?: string;
+  id?: string;
+  name?: string;
 }
 
 const ProjectList: React.FC = () => {
@@ -23,9 +29,49 @@ const ProjectList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [apiError, setApiError] = useState<string | null>(null);
   const { user } = useAuth();
+  const [userProjects, setUserProjects] = useState<string[]>([]);
 
-  
-  const canCreateProject = user && (user.role === 'admin' || user.role === 'manager');
+  // A manager can create a project if they're admin or assigned to any project
+  const canCreateProject = user && (
+    user.role === 'admin' || 
+    (user.role === 'manager' && userProjects.length > 0)
+  );
+
+  useEffect(() => {
+    // Fetch the projects the user is a member of
+    const fetchUserProjects = async () => {
+      if (user && user.role === 'manager') {
+        try {
+          const projectsResponse = await axios.get('/projects');
+          const projectsArray = Array.isArray(projectsResponse.data) 
+            ? projectsResponse.data 
+            : projectsResponse.data.projects || [];
+          
+          // Check if the user is a member of any project
+          const userProjectIds = projectsArray
+            .filter((project: Project) => {
+              if (!project.members) return false;
+              
+              const members = Array.isArray(project.members) ? project.members : [];
+              return members.some((member: ProjectMember | string) => {
+                if (typeof member === 'string') {
+                  return member === user._id;
+                } else {
+                  return (member._id === user._id || member.id === user._id);
+                }
+              });
+            })
+            .map((project: Project) => project._id || project.id || '');
+          
+          setUserProjects(userProjectIds);
+        } catch (error) {
+          console.error('Error fetching user projects:', error);
+        }
+      }
+    };
+    
+    fetchUserProjects();
+  }, [user]);
 
   useEffect(() => {
     const fetchProjects = async () => {

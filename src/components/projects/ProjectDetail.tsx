@@ -77,7 +77,11 @@ const ProjectDetail: React.FC = () => {
   });
 
  
-  const canModifyProject = user && (user.role === 'admin' || user.role === 'manager');
+  const canModifyProject = user && (
+    user.role === 'admin' || 
+    (user.role === 'manager' && 
+      (members.some(member => member.id === user._id) || !members.length))
+  );
 
   useEffect(() => {
     const fetchProjectDetails = async () => {

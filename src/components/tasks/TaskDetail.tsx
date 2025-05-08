@@ -41,7 +41,17 @@ interface TaskResponse {
 
 interface User {
   id: string;
+  _id?: string;
   name: string;
+  email: string;
+  role: string;
+}
+
+interface ProjectMember {
+  _id?: string;
+  id?: string;
+  name?: string;
+  email?: string;
 }
 
 interface Comment {
@@ -61,6 +71,7 @@ const TaskDetail: React.FC = () => {
   const { user } = useAuth();
   const [task, setTask] = useState<Task | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [projectMembers, setProjectMembers] = useState<{id: string, name: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [newComment, setNewComment] = useState<Comment | undefined>(undefined);
@@ -73,8 +84,13 @@ const TaskDetail: React.FC = () => {
     assignedToId: ''
   });
 
-
-  const canModifyTask = user && (user.role === 'admin' || user.role === 'manager');
+  const canModifyTask = user && (
+    user.role === 'admin' || 
+    (user.role === 'manager' && (
+      (task?.assignedTo?.id === user._id) || 
+      (projectMembers.some(member => member.id === user._id))
+    ))
+  );
 
   useEffect(() => {
     const fetchTaskDetails = async () => {
@@ -257,6 +273,44 @@ const TaskDetail: React.FC = () => {
           
           console.error('Task not found by any method');
           toast.error('Task not found');
+        }
+
+        // Fetch the project members if we have a project ID
+        if (task && task.projectId) {
+          try {
+            const projectId = typeof task.projectId === 'object' && task.projectId !== null
+              ? ((task.projectId as { _id?: string; id?: string })._id || (task.projectId as { _id?: string; id?: string }).id || '')
+              : task.projectId;
+              
+            if (typeof projectId === 'string' && projectId.length > 0) {
+              const projectResponse = await axios.get(`/projects/${projectId}`);
+              const projectData = projectResponse.data.project || projectResponse.data;
+              
+              // Get project members
+              if (projectData && projectData.members) {
+                const membersList = Array.isArray(projectData.members) 
+                  ? projectData.members
+                  : [];
+                  
+                const formattedMembers = membersList.map((member: ProjectMember | string) => {
+                  if (typeof member === 'string') {
+                    // If member is just an ID
+                    return { id: member, name: 'Unknown Member' };
+                  } else {
+                    // If member is an object
+                    return { 
+                      id: member._id || member.id || '', 
+                      name: member.name || 'Unknown Member'
+                    };
+                  }
+                });
+                
+                setProjectMembers(formattedMembers);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching project members:', error);
+          }
         }
       } catch (error) {
         console.error('Error in task fetching process:', error);
@@ -765,7 +819,7 @@ const TaskDetail: React.FC = () => {
       
       {!isLoading && task && id && (
         <>
-          <CommentForm taskId={id} onCommentAdded={handleCommentAdded} />
+          <CommentForm taskId={id} onCommentAdded={handleCommentAdded} taskData={task} />
           <CommentList taskId={id} newComment={newComment} />
         </>
       )}

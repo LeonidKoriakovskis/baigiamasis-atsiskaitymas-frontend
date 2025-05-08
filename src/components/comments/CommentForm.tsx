@@ -14,18 +14,35 @@ interface Comment {
   timestamp: string;
 }
 
+interface Task {
+  id: string;
+  assignedTo?: {
+    id?: string;
+    name?: string;
+  };
+}
+
 interface CommentFormProps {
   taskId: string;
   onCommentAdded: (comment: Comment) => void;
+  taskData?: Task;
 }
 
-const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentAdded }) => {
+const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentAdded, taskData }) => {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuth();
 
-
-  const canAddComments = user && (user.role === 'admin' || user.role === 'manager');
+  // Check if user can add comments
+  const canAddComments = user && (
+    user.role === 'admin' || 
+    (user.role === 'manager' && (
+      // Manager is assigned to the task
+      (taskData?.assignedTo?.id === user._id) ||
+      // Task doesn't have assignment data
+      !taskData
+    ))
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -35,32 +35,7 @@ const App: React.FC = () => {
   // Set up axios defaults
   axios.defaults.baseURL = 'http://localhost:3000/api';
   
-  // Test API connectivity on startup
-  useEffect(() => {
-    const testApiConnection = async () => {
-      try {
-        console.log('Testing API connection...');
-        const response = await axios.get('/');
-        console.log('API Connection successful:', response.data);
-      } catch (error) {
-        console.error('API Connection test failed:', error);
-        
-        // Try a direct projects endpoint test
-        try {
-          console.log('Testing projects endpoint directly...');
-          const projectsResponse = await axios.get('/projects');
-          const projects = Array.isArray(projectsResponse.data) 
-            ? projectsResponse.data 
-            : projectsResponse.data.projects || [];
-          console.log('Projects endpoint response:', projects);
-        } catch (projectsError) {
-          console.error('Projects endpoint test failed. Make sure the backend server is running at http://localhost:3000', projectsError);
-        }
-      }
-    };
-    
-    testApiConnection();
-  }, []);
+
   
   // Set auth token for all requests if available
   useEffect(() => {
